@@ -60,6 +60,41 @@ class Screen(object):
             if box.style == "dynamic" :
                 box.draw_in_box(data_dict)
 
+    def fit_text_to_box(self, text, font="bitmap8", font_scale=7, width=WIDTH, height=HEIGHT):
+        """ The PicoGraphics library will wrap text automaticaly if it's wider
+            than the width specified. This version breaks lines before that to
+            allow them to be individually aligned centrally."""
+        # ToDo : how to do this in intelligent boxes ? Maybe add the ability to split a box, and redefine it's 'border' when a line needs to be wrapped ?
+        # ToDO : does the routine need to be able to scale up as well as down ? to fill the box as well as ensure the text fits
+        # ToDo : how might it cope with 'dyanmic' text i.e. data values
+#       ToDo - everything needs to be rethought as all the things that used to get passed in, are now attributes of the box itself.
+        words = text.split()
+        breaker = " "
+        lines = []
+        initial_font_scale = font_scale
+        # Try to make sure longest words fits within width
+        while any(display.measure_text(x, font_scale) > width for x in words) and font_scale > 0:
+            font_scale -= 1
+        # If the longest word at the smallest scale for the font couldn't fit,
+        # Abandon spltting on spaces and just wrap text at the end of each line
+        if font_scale == 0:
+            font_scale = initial_font_scale
+            words = list(text)
+            breaker = ""
+        # Break the text into lines that fit within width.
+        while len(words) > 0:
+            cut = len(words)
+            while display.measure_text(breaker.join(words[0:cut]), font_scale) > width :
+                cut -= 1
+            lines.append(breaker.join(words[0:cut]))
+            words = words[cut:]
+            print(f"Added {lines[-1]}, left with {words}")
+        # Final check - if letter height * number of lines > height given, reduce font size and start again.
+        if (get_font_height(font) + 1) * font_scale * len(lines) > height:
+            font_scale -= 1
+            lines, font_scale = self.wrap_text(text, font=font, font_scale=font_scale, width=width, height=height)
+        return lines, font_scale
+
 
 class Screen_old(object):
     """ToDo : This is the outgoing screen object, need to :
@@ -362,11 +397,6 @@ boot_screen.draw_screen(thingy)
 display.update()
 time.sleep(2)
 
-#date = time.localtime()
-#date_string = f"{date[0]:0>4}/{date[1]:0>2}/{date[2]:0>2}, {date[3]:0>2}:{date[4]:0>2}:{date[5]:0>2}"
-#screens[0].draw_screen()
-#screens[0].draw_in_box(f"{date_string}", loc=4, colour=GREEN)
-#display.update()
 
 print(time.localtime())
 
