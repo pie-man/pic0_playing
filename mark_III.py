@@ -31,13 +31,11 @@ GMT_OFFSET = 3600 #BST
 led = RGBLED(26, 27, 28)
 
 class Screen(object):
-    def __init__(self, title="UnTitled", title_font = "bitmap8", font_scale = 7, font_thickness=3):
+    def __init__(self, title="UnTitled"):
         # ToDo : Title Font, border (and preffered height?) should be passed in upon creation
-        self.title_font = title_font
+        self.title_font = "bitmap8"
         self.title_border = 10
-        self.title_font_thickness = font_thickness
-        display.set_thickness(font_thickness)
-        self.title_lines,  font_scale = self.wrap_text(title, title_font ,font_scale, width=WIDTH, height=HEIGHT//2 - 2*self.title_border)
+        self.title_lines,  font_scale = self.wrap_text(title, width=WIDTH, height=HEIGHT//2 - 2*self.title_border)
         self.title_font_size = font_scale
         print(f"have ended up with {self.title_lines} @ font scale {font_scale}")
         self.shadow_offset = 2
@@ -51,7 +49,7 @@ class Screen(object):
         # 1st box, for title, is half the screen
         # ToDo : add a box creating method so the 'screens' can have different boxes
         self.add_box(name="title", background_colour=BLACK, font_colour=BLUE,
-                     x_start=0, y_start=0, box_width=WIDTH, box_height=self.title_height )
+                     x_start=0, y_start=0, box_width=WIDTH, box_height=HEIGHT )
 
         self.add_box(name="UnTitled1", background_colour=BLACK, font_colour=BLUE,
                      x_start=0, y_start=self.title_height, box_width=WIDTH // 2, box_height=(HEIGHT - self.title_height) // 2 )
@@ -59,15 +57,14 @@ class Screen(object):
         self.add_box(name="UnTitled2", background_colour=BLACK, font_colour=BLUE,
                      x_start=WIDTH // 2, y_start=self.title_height, box_width=WIDTH // 2, box_height=(HEIGHT - self.title_height) // 2 )
         
-        next_start = self.title_height + (HEIGHT - self.title_height) // 2
         self.add_box(name="UnTitled3", background_colour=BLACK, font_colour=BLUE,
-                     x_start=0, y_start=next_start, box_width=WIDTH // 2, box_height=(HEIGHT - next_start) )
+                     x_start=0, y_start=self.title_height + (HEIGHT - self.title_height) // 2, box_width=WIDTH // 2, box_height=(HEIGHT - self.title_height) // 2 )
         
         self.add_box(name="UnTitled4", background_colour=BLACK, font_colour=BLUE,
-                     x_start=WIDTH // 2, y_start=next_start, box_width=(WIDTH// 2), box_height=(HEIGHT - next_start) )
+                     x_start=WIDTH // 2, y_start=self.title_height + (HEIGHT - self.title_height) // 2, box_width=(WIDTH// 2), box_height=(HEIGHT - self.title_height) // 2 )
         
         self.add_box(name="UnTitled5", background_colour=BLACK, font_colour=BLUE,
-                     x_start=0, y_start=next_start, box_width=WIDTH, box_height=(HEIGHT - next_start) )
+                     x_start=0, y_start=self.title_height + (HEIGHT - self.title_height) // 2, box_width=WIDTH, box_height=(HEIGHT - self.title_height) // 2 )
         
         
     def wrap_text(self, text, font="bitmap8", font_scale=7, width=WIDTH, height=HEIGHT):
@@ -77,14 +74,13 @@ class Screen(object):
         words = text.split()
         breaker = " "
         lines = []
-        initial_font_scale = font_scale
         # Try to make sure longest words fits within width
         while any(display.measure_text(x, font_scale) > width for x in words) and font_scale > 0:
             font_scale -= 1
         # If the longest word at the smallest scale for the font couldn't fit,
         # Abandon spltting on spaces and just wrap text at the end of each line
         if font_scale == 0:
-            font_scale = initial_font_scale
+            font_scale = self.title_font_size
             words = list(text)
             breaker = ""
         # Break the text into lines that fit within width.
@@ -123,7 +119,8 @@ class Screen(object):
         display.set_clip(x_start, y_start, x_finish, y_finish)
         display.set_pen(DAVE)
         display.clear()
-        self.draw_title(font=self.title_font)
+        display.set_thickness(3)
+        self.draw_title()
         display.remove_clip
 
     def add_box(self, name="untitled", background_colour=BLACK, font_colour=BLUE,
@@ -139,7 +136,7 @@ class Screen(object):
         display.set_pen(background)
         display.clear()
         x_offset =  x_start + self.title_border
-        x_offset =  x_start + max(((working_width - length) // 2),0) + self.title_border
+        x_offset =  x_start + ((working_width - length) // 2) + self.title_border
         y_offset =  y_start + self.title_border
         display.set_pen(colour)
         display.text(text, x_offset, y_offset, working_width, self.text_font_size * scale)
@@ -217,7 +214,7 @@ def temp_colours(temp):
         colour = AMBER
         led_colour = (25, 10, 0)
     else :
-        led_colour = (30, 0, 0)
+        led._colour = (30, 0, 0)
         colour = RED
     return colour, led_colour
     
@@ -226,9 +223,8 @@ log_file = open("bme690_data_II.csv","a")
 screens = []
 screens.append(Screen("Temperature, Pressure & Humidity"))
 screens.append(Screen("Time, Temp & Humidity"))
-screens.append(Screen("Temperature"))
 
-boot_screen = Screen("Preparing", title_font="bitmap8", font_scale = 1, font_thickness=3)
+boot_screen = Screen("Preparing")
 boot_screen.draw_screen()
 boot_screen.draw_in_box(f"Wifi", box_no=5, colour=RED)
 display.update()
@@ -275,9 +271,6 @@ take_readings_bme(temperature, pressure, humidity, gas, heater)
 date = time.localtime()
 date_string = f"{date[0]:0>4}/{date[1]:0>2}/{date[2]:0>2}, {date[3]:0>2}:{date[4]:0>2}:{date[5]:0>2}"
 
-max_temp = -100
-min_temp = 100
-
 # The bit the updates the display and sleeps..
 while True:
 #for thing in range(1):
@@ -285,7 +278,7 @@ while True:
     count = count % count_reset
 
     if count % screen_update == 0:
-        current_screen = ((current_screen + 1) % len(screens))
+        current_screen = ((current_screen + 1) % 2) # 2 should be max_screens
         #print(f"current screen is {current_screen}")
         #print(f"at {date_string} teperature = {temperature.average()}, humidity = {humidity.average()}"
         #      f", heater is {"Unstable" if heater.any_match("Unstable") else "Stable"}")
@@ -295,12 +288,6 @@ while True:
     date = time.localtime()
     date_string = f"{date[0]:0>4}/{date[1]:0>2}/{date[2]:0>2}, {date[3]:0>2}:{date[4]:0>2}:{date[5]:0>2}"
     #print(f"at {date_string} teperature = {temperature.average()}, humidity = {humidity.average()}")
-    if date[3] == 0 and date[4] ==0 : # It's midnight...
-        # Reset the max and min temps to one's which should be immediately overridden
-        max_temp = -100
-        min_temp = 100
-    max_temp = max(temperature.average(), max_temp)
-    min_temp = min(temperature.average(), min_temp)
 
     if count % log_update == 0:
         heater_status = "Unstable" if heater.any_match("Unstable") else "Stable"
@@ -330,17 +317,7 @@ while True:
         screens[1].draw_in_box(f"{humidity.average():.2f}%", box_no=2, colour=GREEN)
         date = time.localtime(time.time()+GMT_OFFSET)
         screens[1].draw_in_box(f"{date[3]:0>2}:{date[4]:0>2}:{date[5]:0>2}", box_no=5, colour=DAVE, scale=2)
-    elif current_screen == 2:
-        screens[2].draw_screen()
-        led.set_rgb(0, 0, 0)
-        colour, led_colour = temp_colours(temperature.average())
-        led.set_rgb(led_colour[0], led_colour[1], led_colour[2])
-        screens[2].draw_in_box(f"Current :", box_no=1, colour=colour)
-        screens[2].draw_in_box(f"{temperature.average():.2f}°c", box_no=2, colour=colour)
-        max_colour, _ = temp_colours(max_temp)
-        min_colour, _ = temp_colours(min_temp)
-        screens[2].draw_in_box(f"Max : {max_temp:.2f}°c", box_no=3, colour=max_colour)
-        screens[2].draw_in_box(f"Min : {min_temp:.2f}°c", box_no=4, colour=min_colour)
+
 
     time.sleep(1)
     display.update()
