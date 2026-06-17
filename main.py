@@ -118,18 +118,19 @@ def plot_line(data_block, baseline, graph_scale, bar_width):
     prev_t = data_block[0]
     i = 0
     for t in data_block[1:]:
-        rect_top, rect_thickness , rect_colour = ( 
+        rect_top, rect_thickness = ( 
             calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
                                   baseline, graph_scale)
         )
-        TEMPERATURE_COLOUR = display.create_pen(*rect_colour)
+        colour_shade = calc_rectangle_colour(t, prev_t)
+        TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
         display.set_pen(TEMPERATURE_COLOUR)
         display.rectangle(i + w_offset, rect_top + h_offset, bar_width, rect_thickness)
         i += bar_width
         prev_t = t
 
 class data_buffer(object):
-    def __init__(self, max_len=10, default_value=0, prefill=False):
+    def __init__(self, max_len=10, default_value=0.0, prefill=False):
         self.max_len = max_len
         self.default_value = default_value
         if prefill:
@@ -160,18 +161,24 @@ class data_buffer(object):
 def calc_rectangle_coords(temp, prev_temp, graph_height=GRAPH_HEIGHT, baseline=TEMP_MIN, scale=10):
     upper_temp = max(temp, prev_temp) - baseline
     difference = abs(temp - prev_temp)
-    mid_temp = (difference / 2.0) + min(temp, prev_temp)
-    # print(f"prev = {prev_temp},  current = {temp}, mid_temp is {mid_temp}")
-    colour_temp = temperature_to_color(mid_temp)
     top = graph_height - round(upper_temp * scale) - 2
     rect_height = round(difference * scale) + 2
-    return top, rect_height, colour_temp
+    return top, rect_height
 
-def calc_graph_scale(graph_height, temp_max, temp_min):
-    baseline = temp_min // 1
-    # difference = abs(temp_max - baseline)
-    difference = max(3, abs(temp_max - baseline))
-    scale = (graph_height / difference) // 1
+def calc_rectangle_colour(temp, prev_temp):
+    mid_temp = min(temp, prev_temp) + abs(temp - prev_temp) / 2.0
+    colour_temp = temperature_to_color(mid_temp)
+    return colour_temp
+
+def calc_graph_scale(graph_height, temp_max, temp_min, min_scale=3, accuracy=1.0):
+    """Given a graph_heigt in pixels along with maximum and minimum teperaturtes,
+    This routine returns the baseline temperature and a scaling factor to convert
+    temperature differences into pixels.
+    min_scale, default=3, is the minimum difference from baseline to the top in degrees
+    accuracy, default = 1, defines the floor below min_temp in degrees"""
+    baseline = (temp_min // accuracy ) * accuracy
+    difference = max(min_scale, abs(temp_max - baseline))
+    scale = ((graph_height / difference) // accuracy ) * accuracy
     print(f"temp_min = {temp_min}, baseline = {baseline}, "
           f"temp_max = {temp_max}, raw scale = {graph_height / abs(temp_max - baseline)}")
     print(f"with graph_height {graph_height} and scale {scale}, max temp would be {(temp_max - baseline) * scale}")
@@ -191,23 +198,22 @@ def calc_tick_marks(graph_height, graph_scale):
     print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
 
-
-cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
-temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
+def plot_graph():
+    pass
 
 current_int_temp = get_int_temp()
 current_ext_temp = get_ext_temp()
-for _ in range(10):
-    cpu_temperatures.add(current_int_temp)
-    temperatures.add(current_ext_temp)
+cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_int_temp, prefill=True)
+temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_ext_temp, prefill=True)
+
 min_t = min(current_ext_temp, current_int_temp)
 max_t = max(current_ext_temp, current_int_temp)
 graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t)
 print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
 tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
 
-graph_update = 5000 # m seconds
-readout_update = 1000 # m seconds
+graph_update = 1000 # m seconds
+readout_update = 500 # m seconds
 ref_time = time.ticks_ms()
 
 while True:
@@ -227,7 +233,7 @@ while True:
         temperatures.add(current_ext_temp)
         max_t = max(cpu_temperatures.get_max(),temperatures.get_max())
         min_t = min(cpu_temperatures.get_min(), temperatures.get_min())
-        graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t)
+        graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t, accuracy=0.2)
         print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
         tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
 
@@ -235,11 +241,14 @@ while True:
     plot_line(temperatures.get_data(), baseline, graph_scale, bar_width)
 
     display.set_pen(WHITE)
-    t_diff = tick_marks[1] - tick_marks[0]
     for tick in tick_marks:
         tick_line = round(GRAPH_HEIGHT + h_offset - (tick * graph_scale) - 18)
         tick_val = baseline + tick
         # print(f"going to put {tick_val} @ {tick_line}")
+        colour = temperature_to_color(tick_val)
+        COLOUR_PEN = display.create_pen(*colour)
+        display.set_pen(COLOUR_PEN)
+
         display.text(f"{tick_val:02.1f}c", 4, tick_line, scale = 2)
 
     # heck lets also set the LED to match
