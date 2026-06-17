@@ -198,8 +198,28 @@ def calc_tick_marks(graph_height, graph_scale):
     print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
 
-def plot_graph():
+def plot_graphs(collection_o_graphable_thingies):
     pass
+    max_values = []
+    min_values = []
+    for graphable_thingy in collection_o_graphable_thingies:
+        max_values.append(graphable_thingy.get_max())
+        min_values.append(graphable_thingy.get_min())
+    max_t = max(max_values)
+    min_t = min(min_values)
+    graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t, accuracy=0.2)
+    print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
+    tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
+    for tick in tick_marks:
+        tick_line = round(GRAPH_HEIGHT + h_offset - (tick * graph_scale) - 18)
+        tick_val = baseline + tick
+        # print(f"going to put {tick_val} @ {tick_line}")
+        colour = temperature_to_color(tick_val)
+        COLOUR_PEN = display.create_pen(*colour)
+        display.set_pen(COLOUR_PEN)
+        display.text(f"{tick_val:02.1f}c", 4, tick_line, scale = 2)
+    for graphable_thingy in collection_o_graphable_thingies:
+        plot_line(graphable_thingy.get_data(), baseline, graph_scale, bar_width)
 
 current_int_temp = get_int_temp()
 current_ext_temp = get_ext_temp()
@@ -231,25 +251,8 @@ while True:
         ref_time += graph_update
         cpu_temperatures.add(current_int_temp)
         temperatures.add(current_ext_temp)
-        max_t = max(cpu_temperatures.get_max(),temperatures.get_max())
-        min_t = min(cpu_temperatures.get_min(), temperatures.get_min())
-        graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t, accuracy=0.2)
-        print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
-        tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
 
-    plot_line(cpu_temperatures.get_data(), baseline, graph_scale, bar_width)
-    plot_line(temperatures.get_data(), baseline, graph_scale, bar_width)
-
-    display.set_pen(WHITE)
-    for tick in tick_marks:
-        tick_line = round(GRAPH_HEIGHT + h_offset - (tick * graph_scale) - 18)
-        tick_val = baseline + tick
-        # print(f"going to put {tick_val} @ {tick_line}")
-        colour = temperature_to_color(tick_val)
-        COLOUR_PEN = display.create_pen(*colour)
-        display.set_pen(COLOUR_PEN)
-
-        display.text(f"{tick_val:02.1f}c", 4, tick_line, scale = 2)
+    plot_graphs([cpu_temperatures, temperatures])
 
     # heck lets also set the LED to match
     # But cut the brightness to about 10%
