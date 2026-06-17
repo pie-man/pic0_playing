@@ -17,7 +17,10 @@ display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
 display.set_backlight(0.5)
 
 WIDTH, HEIGHT = display.get_bounds()
-GRAPH_HEIGHT = HEIGHT - 30
+h_offset = 30
+w_offset = 50
+GRAPH_HEIGHT = HEIGHT - h_offset
+GRAPH_WIDTH = WIDTH - w_offset
 
 BLACK = display.create_pen(0, 0, 0)
 WHITE = display.create_pen(255, 255, 255)
@@ -121,7 +124,7 @@ def plot_line(data_block, baseline, graph_scale, bar_width):
         )
         TEMPERATURE_COLOUR = display.create_pen(*rect_colour)
         display.set_pen(TEMPERATURE_COLOUR)
-        display.rectangle(i, rect_top + offset, bar_width, rect_thickness)
+        display.rectangle(i + w_offset, rect_top + h_offset, bar_width, rect_thickness)
         i += bar_width
         prev_t = t
 
@@ -142,8 +145,17 @@ class data_buffer(object):
     def average(self):
         return sum(self.data) / float(len(self.data))
 
+    def get_max(self):
+        return max(self.data)
+    
+    def get_min(self):
+        return min(self.data)
+
     def any_match(self, value):
         return value in self.data
+    
+    def get_data(self):
+        return self.data
 
 def calc_rectangle_coords(temp, prev_temp, graph_height=GRAPH_HEIGHT, baseline=TEMP_MIN, scale=10):
     upper_temp = max(temp, prev_temp) - baseline
@@ -156,12 +168,32 @@ def calc_rectangle_coords(temp, prev_temp, graph_height=GRAPH_HEIGHT, baseline=T
     return top, rect_height, colour_temp
 
 def calc_graph_scale(graph_height, temp_max, temp_min):
-    difference = max(10, abs(temp_max - temp_min))
-    scale = graph_height / difference
-    return scale
+    baseline = temp_min // 1
+    # difference = abs(temp_max - baseline)
+    difference = max(3, abs(temp_max - baseline))
+    scale = (graph_height / difference) // 1
+    print(f"temp_min = {temp_min}, baseline = {baseline}, "
+          f"temp_max = {temp_max}, raw scale = {graph_height / abs(temp_max - baseline)}")
+    print(f"with graph_height {graph_height} and scale {scale}, max temp would be {(temp_max - baseline) * scale}")
+    return scale, baseline
 
-cpu_temperatures = data_buffer(max_len=WIDTH // bar_width)
-temperatures = data_buffer(max_len=WIDTH // bar_width)
+def calc_tick_marks(graph_height, graph_scale):
+    temp_range = graph_height / graph_scale
+    print(f"I think the temp range is {temp_range}")
+    max_tick_marks = graph_height // 36
+    print(f"I think I can squeeze in {max_tick_marks} ticks")
+    tick_spacing = max(0.1, temp_range / max_tick_marks)
+    print(f"tick marks every {tick_spacing} degrees")
+    upper_limit = int((GRAPH_HEIGHT // graph_scale) *10)
+    int_tick_spacing = int(tick_spacing * 10)
+    print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
+    tick_marks = [x/10 for x in range(0, upper_limit, int_tick_spacing)]
+    print(f"gives a set of tick marks : {tick_marks}")
+    return tick_marks
+
+
+cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
+temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
 
 current_int_temp = get_int_temp()
 current_ext_temp = get_ext_temp()
@@ -170,13 +202,13 @@ for _ in range(10):
     temperatures.add(current_ext_temp)
 min_t = min(current_ext_temp, current_int_temp)
 max_t = max(current_ext_temp, current_int_temp)
-graph_scale = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t)
-# print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
+graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t)
+print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
+tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
 
-graph_update = 60000 # m seconds
+graph_update = 5000 # m seconds
 readout_update = 1000 # m seconds
 ref_time = time.ticks_ms()
-offset = HEIGHT - GRAPH_HEIGHT
 
 while True:
     tm_at_start = time.ticks_ms()
@@ -193,13 +225,22 @@ while True:
         ref_time += graph_update
         cpu_temperatures.add(current_int_temp)
         temperatures.add(current_ext_temp)
-        max_t = max(max(cpu_temperatures.data),max(temperatures.data))
-        min_t = min(min(cpu_temperatures.data), min(temperatures.data))
-        graph_scale = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t)
+        max_t = max(cpu_temperatures.get_max(),temperatures.get_max())
+        min_t = min(cpu_temperatures.get_min(), temperatures.get_min())
+        graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t)
         print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
+        tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
 
-    plot_line(cpu_temperatures.data, min_t, graph_scale, bar_width)
-    plot_line(temperatures.data, min_t, graph_scale, bar_width)
+    plot_line(cpu_temperatures.get_data(), baseline, graph_scale, bar_width)
+    plot_line(temperatures.get_data(), baseline, graph_scale, bar_width)
+
+    display.set_pen(WHITE)
+    t_diff = tick_marks[1] - tick_marks[0]
+    for tick in tick_marks:
+        tick_line = round(GRAPH_HEIGHT + h_offset - (tick * graph_scale) - 18)
+        tick_val = baseline + tick
+        # print(f"going to put {tick_val} @ {tick_line}")
+        display.text(f"{tick_val:02.1f}c", 4, tick_line, scale = 2)
 
     # heck lets also set the LED to match
     # But cut the brightness to about 10%
@@ -208,20 +249,21 @@ while True:
 
     # draws a white background for the text
     display.set_pen(WHITE)
-    display.rectangle(1, 0, 100, 25)
+    display.rectangle(1, 0, 100, 26)
 
     # writes the reading as text in the white rectangle
+    display.set_font("bitmap8")
     display.set_pen(BLACK)
-    display.text("{:.2f}".format(current_ext_temp) + "c", 8, 3, 0, 3)
+    display.text("{:.2f}".format(current_ext_temp) + "c", 8, 3, scale=3)
 
     # draws a blue background for the text
     display.set_pen(BLUE)
-    display.rectangle(200, 0, 120, 25)
+    display.rectangle(200, 0, 120, 26)
 
     clock = time.localtime()
     # writes the reading as text in the white rectangle
     display.set_pen(BLACK)
-    display.text(f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}", 204, 3, 0, 3)
+    display.text(f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}", 204, 3, scale=3)
 
     # time to update the display
     display.update()
