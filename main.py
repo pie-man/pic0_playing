@@ -17,10 +17,10 @@ display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
 display.set_backlight(0.5)
 
 WIDTH, HEIGHT = display.get_bounds()
-h_offset = 30
-w_offset = 50
-GRAPH_HEIGHT = HEIGHT - h_offset
-GRAPH_WIDTH = WIDTH - w_offset
+y_offset = 30
+x_offset = 50
+GRAPH_HEIGHT = HEIGHT - y_offset
+GRAPH_WIDTH = WIDTH - x_offset
 
 BLACK = display.create_pen(0, 0, 0)
 WHITE = display.create_pen(255, 255, 255)
@@ -125,7 +125,7 @@ def plot_line(data_block, baseline, graph_scale, bar_width):
         colour_shade = calc_rectangle_colour(t, prev_t)
         TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
         display.set_pen(TEMPERATURE_COLOUR)
-        display.rectangle(i + w_offset, rect_top + h_offset, bar_width, rect_thickness)
+        display.rectangle(i + x_offset, rect_top + y_offset, bar_width, rect_thickness)
         i += bar_width
         prev_t = t
 
@@ -179,27 +179,32 @@ def calc_graph_scale(graph_height, temp_max, temp_min, min_scale=3, accuracy=1.0
     baseline = (temp_min // accuracy ) * accuracy
     difference = max(min_scale, abs(temp_max - baseline))
     scale = ((graph_height / difference) // accuracy ) * accuracy
-    print(f"temp_min = {temp_min}, baseline = {baseline}, "
-          f"temp_max = {temp_max}, raw scale = {graph_height / abs(temp_max - baseline)}")
-    print(f"with graph_height {graph_height} and scale {scale}, max temp would be {(temp_max - baseline) * scale}")
+    # print(f"temp_min = {temp_min}, baseline = {baseline}, "
+        #   f"temp_max = {temp_max}, raw scale = {graph_height / abs(temp_max - baseline)}")
+    # print(f"with graph_height {graph_height} and scale {scale}, max temp would be {(temp_max - baseline) * scale}")
     return scale, baseline
 
 def calc_tick_marks(graph_height, graph_scale):
     temp_range = graph_height / graph_scale
-    print(f"I think the temp range is {temp_range}")
+    # print(f"I think the temp range is {temp_range}")
     max_tick_marks = graph_height // 36
-    print(f"I think I can squeeze in {max_tick_marks} ticks")
+    # print(f"I think I can squeeze in {max_tick_marks} ticks")
     tick_spacing = max(0.1, temp_range / max_tick_marks)
-    print(f"tick marks every {tick_spacing} degrees")
+    # print(f"tick marks every {tick_spacing} degrees")
     upper_limit = int((GRAPH_HEIGHT // graph_scale) *10)
     int_tick_spacing = int(tick_spacing * 10)
-    print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
+    # print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
     tick_marks = [x/10 for x in range(0, upper_limit, int_tick_spacing)]
-    print(f"gives a set of tick marks : {tick_marks}")
+    # print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
 
 def plot_graphs(collection_o_graphable_thingies):
-    pass
+    # TODO: GRAPH_HEIGHT is still global and accuracy is hardwired here...
+    # TODO: The concept of TLC (top left corner) is required here to offset where the graph is plotted.
+    graph_height = GRAPH_HEIGHT
+    scale_to_within = 0.2
+    TopLCorner = (0, y_offset)
+    # End of TODO block - hopefully
     max_values = []
     min_values = []
     for graphable_thingy in collection_o_graphable_thingies:
@@ -207,34 +212,43 @@ def plot_graphs(collection_o_graphable_thingies):
         min_values.append(graphable_thingy.get_min())
     max_t = max(max_values)
     min_t = min(min_values)
-    graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t, accuracy=0.2)
-    print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
-    tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
+    graph_scale, baseline = calc_graph_scale(graph_height, max_t, min_t, accuracy=scale_to_within)
+    # print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
+    tick_marks = calc_tick_marks(graph_height, graph_scale)
     for tick in tick_marks:
-        tick_line = round(GRAPH_HEIGHT + h_offset - (tick * graph_scale) - 18)
+        tick_line = round(graph_height + TopLCorner[1] - (tick * graph_scale) - 16)
         tick_val = baseline + tick
         # print(f"going to put {tick_val} @ {tick_line}")
         colour = temperature_to_color(tick_val)
         COLOUR_PEN = display.create_pen(*colour)
         display.set_pen(COLOUR_PEN)
-        display.text(f"{tick_val:02.1f}c", 4, tick_line, scale = 2)
+        display.text(f"{tick_val:02.1f}c_", 4, tick_line, scale = 2)
     for graphable_thingy in collection_o_graphable_thingies:
         plot_line(graphable_thingy.get_data(), baseline, graph_scale, bar_width)
+
+def write_text_in_a_box(text, TopLeft, width, height, background, ink):
+    display.set_font("bitmap8")
+    l_margin = 8
+    t_margin = 3
+    # draws a white background for the text
+    display.set_pen(background)
+    display.rectangle(TopLeft[0], TopLeft[1], width, height)
+    # writes the reading as text in the white rectangle
+    display.set_pen(ink)
+    display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=3)
 
 current_int_temp = get_int_temp()
 current_ext_temp = get_ext_temp()
 cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_int_temp, prefill=True)
 temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_ext_temp, prefill=True)
+plot_graphs([cpu_temperatures, temperatures])
 
-min_t = min(current_ext_temp, current_int_temp)
-max_t = max(current_ext_temp, current_int_temp)
-graph_scale, baseline = calc_graph_scale(GRAPH_HEIGHT, max_t, min_t)
-print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
-tick_marks = calc_tick_marks(GRAPH_HEIGHT, graph_scale)
-
-graph_update = 1000 # m seconds
-readout_update = 500 # m seconds
+graph_update = 60000 # m seconds
+readout_update = 1000 # m seconds
 ref_time = time.ticks_ms()
+
+tmp_cpu_temperatures = data_buffer(max_len=(graph_update // readout_update))
+tmp_temperatures = data_buffer(max_len=(graph_update // readout_update))
 
 while True:
     tm_at_start = time.ticks_ms()
@@ -244,38 +258,30 @@ while True:
 
     current_int_temp = get_int_temp()
     current_ext_temp = get_ext_temp()
+    tmp_cpu_temperatures.add(current_int_temp)
+    tmp_temperatures.add(current_ext_temp)
 
     # print(f"since ref time it has been {(tm_at_start - ref_time)/1000}s")
     if tm_at_start - ref_time >= graph_update:
-        print(f"since ref time it has been {(tm_at_start - ref_time)/1000}s")
-        ref_time += graph_update
-        cpu_temperatures.add(current_int_temp)
-        temperatures.add(current_ext_temp)
+        # print(f"since last update it has been {(tm_at_start - ref_time)/1000:0.3f}s")
+        overspill = tm_at_start - (ref_time + graph_update)
+        ref_time = tm_at_start + overspill
+        cpu_temperatures.add(tmp_cpu_temperatures.average())
+        temperatures.add(tmp_temperatures.average())
 
     plot_graphs([cpu_temperatures, temperatures])
 
     # heck lets also set the LED to match
     # But cut the brightness to about 10%
-    led_colour = [round(val * 0.1) for val in temperature_to_color(current_ext_temp)]
+    led_colour = [round(val * 0.05) for val in temperature_to_color(current_ext_temp)]
     led.set_rgb(*led_colour)
 
-    # draws a white background for the text
-    display.set_pen(WHITE)
-    display.rectangle(1, 0, 100, 26)
-
-    # writes the reading as text in the white rectangle
-    display.set_font("bitmap8")
-    display.set_pen(BLACK)
-    display.text("{:.2f}".format(current_ext_temp) + "c", 8, 3, scale=3)
-
-    # draws a blue background for the text
-    display.set_pen(BLUE)
-    display.rectangle(200, 0, 120, 26)
+    temp_text = "{:.2f}".format(current_ext_temp) + "c"
+    write_text_in_a_box(temp_text, (0, 0), 100, 26, WHITE, BLACK)
 
     clock = time.localtime()
-    # writes the reading as text in the white rectangle
-    display.set_pen(BLACK)
-    display.text(f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}", 204, 3, scale=3)
+    temp_text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+    write_text_in_a_box(temp_text, (200, 0), 120, 26, BLUE, BLACK)
 
     # time to update the display
     display.update()
