@@ -241,10 +241,22 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.set_pen(ink)
     display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
 
+graph_ranges = {
+    "24 hours" : {},
+    "A week" : {},
+    "8 hours" : {},
+    "Last hour" : {},
+    "12 hours" : {}
+}
 current_int_temp = get_int_temp()
 current_ext_temp = get_ext_temp()
 cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_int_temp, prefill=True)
 temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_ext_temp, prefill=True)
+# cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
+# temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
+# cpu_temperatures.add(current_int_temp)
+# temperatures.add(current_int_temp)
+
 plot_graphs([cpu_temperatures, temperatures])
 
 graph_update = 720000 # m seconds
