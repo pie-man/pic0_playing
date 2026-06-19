@@ -280,9 +280,17 @@ class data_buffer(object):
     def average(self):
         return sum(self.data) / float(len(self.data))
 
-
+    def get_max(self):
+        return max(self.data)
+    
+    def get_min(self):
+        return min(self.data)
+    
     def any_match(self, value):
         return value in self.data
+
+    def get_data(self):
+        return self.data
 
 def take_readings_bme(temperature, pressure, humidity, gas, heater):
     readings = bme.read()

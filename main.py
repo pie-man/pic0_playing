@@ -6,9 +6,15 @@ import time
 from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
+from join_network import wifi_login
+from set_time_by_ntp import set_time
 
 # set the time..
-machine.RTC().datetime((2026, 3, 8, 0, 0, 52, 0, 0))
+try:
+    wifi_login()
+    set_time()
+except:
+    machine.RTC().datetime((2026, 3, 8, 0, 0, 52, 0, 0))
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -25,6 +31,7 @@ GRAPH_WIDTH = WIDTH - x_offset
 BLACK = display.create_pen(0, 0, 0)
 WHITE = display.create_pen(255, 255, 255)
 BLUE = display.create_pen(100, 100, 200)
+MAGENTA = display.create_pen(200, 100, 200)
 
     
 # set up the internal temperature sensor
@@ -54,15 +61,15 @@ colour_pallette = {
     "CYAN" : (0, 255, 255),
 }
 
-temp_ranges = {
-    "too-cold"      : (colour_pallette["BLUE"], 15.0),
-    "a-bit-cold"    : (colour_pallette["CYAN"], 17.0),
-    "low-comfort"   : (colour_pallette["GREEN"], 18.0),
-    "high-comfort"  : (colour_pallette["GREEN"], 20.0),
-    "a-bit-hot"     : (colour_pallette["YELLOW"], 22.0),
-    "too-hot"       : (colour_pallette["RED"], 24.0),
-}
-colors = [(0, 0, 255), (0, 255, 255), (0, 255, 0), (255, 255, 0), (255, 0, 0)]
+temp_limits = [
+    (15.0, colour_pallette["BLUE"]),
+    (17.0, colour_pallette["CYAN"]),
+    (18.0, colour_pallette["GREEN"]),
+    (20.0, colour_pallette["GREEN"]),
+    (22.0, colour_pallette["YELLOW"]),
+    (24.0, colour_pallette["RED"]),
+]
+# temp_limits = sorted(temp_limits, key=temp_limits[0])
 
 def get_ext_temp():
     readings = bme.read()
@@ -80,41 +87,30 @@ def scale_temp(temp, temp_min=TEMP_MIN, temp_max=TEMP_MAX):
     return scaled_temp
 
 def temperature_to_color(temp):
-    temp = min(temp, TEMP_MAX)
-    temp = max(temp, TEMP_MIN)
-
-    upper_reg = temp_ranges["too-hot"][1]
-    upper_colour = temp_ranges["too-hot"][0]
-    lower_reg = temp_ranges["too-cold"][1]
-    lower_colour = temp_ranges["too-cold"][0]
-    # print(f"temp is {temp}")
-    temp_labels = [
-        "too-hot", "a-bit-hot", "high-comfort", "low-comfort",
-        "a-bit-cold", "too-cold"
-    ]
-    for comfort_level in temp_labels:
-        if temp <= temp_ranges[comfort_level][1]:
-            # print(f"setting upper temp range to {comfort_level}")
-            upper_reg = temp_ranges[comfort_level][1]
-            upper_colour = temp_ranges[comfort_level][0]
-    temp_labels.reverse()
-    for comfort_level in temp_labels:
-        if temp > temp_ranges[comfort_level][1]:
-            # print(f"setting lower temp range to {comfort_level}")
-            lower_reg = temp_ranges[comfort_level][1]
-            lower_colour = temp_ranges[comfort_level][0]
-    
-    if upper_reg == lower_reg:
-        colour = upper_colour
+    upper_reg = temp_limits[-1][0]
+    lower_reg = temp_limits[0][0]
+    if temp <= temp_limits[0][0]:
+        return temp_limits[0][1]
+    elif temp >= temp_limits[-1][0]:
+        return temp_limits[-1][1]
     else:
-        upper_ratio = float(temp - lower_reg) / float(upper_reg - lower_reg)
-        low_ratio = 1.0 - upper_ratio
-        colour = [
-            int(upper_colour[i] * upper_ratio + lower_colour[i] * low_ratio) for i in range(3)
-        ]
+        for i in range(len(temp_limits) -1):
+            # print(f"i is {i} : range is {temp_limits[i][0]} <= {temp} < {temp_limits[i+1][0]}")
+            if temp >= temp_limits[i][0] and temp < temp_limits[i+1][0]:
+                upper_reg = temp_limits[i+1][0]
+                lower_reg = temp_limits[i][0]
+                upper_colour = temp_limits[i+1][1]
+                lower_colour = temp_limits[i][1]
+                break
+
+    upper_ratio = float(temp - lower_reg) / float(upper_reg - lower_reg)
+    low_ratio = 1.0 - upper_ratio
+    colour = [
+        int(upper_colour[i] * upper_ratio + lower_colour[i] * low_ratio) for i in range(3)
+    ]
     return colour
 
-def plot_line(data_block, baseline, graph_scale, bar_width):
+def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
     prev_t = data_block[0]
     i = 0
     for t in data_block[1:]:
@@ -125,7 +121,7 @@ def plot_line(data_block, baseline, graph_scale, bar_width):
         colour_shade = calc_rectangle_colour(t, prev_t)
         TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
         display.set_pen(TEMPERATURE_COLOUR)
-        display.rectangle(i + x_offset, rect_top + y_offset, bar_width, rect_thickness)
+        display.rectangle(i + top_left[0], rect_top + top_left[1], bar_width, rect_thickness)
         i += bar_width
         prev_t = t
 
@@ -204,6 +200,7 @@ def plot_graphs(collection_o_graphable_thingies):
     graph_height = GRAPH_HEIGHT
     scale_to_within = 0.2
     TopLCorner = (0, y_offset)
+    plot_window = (TopLCorner[0] + x_offset, TopLCorner[1])
     # End of TODO block - hopefully
     max_values = []
     min_values = []
@@ -224,9 +221,9 @@ def plot_graphs(collection_o_graphable_thingies):
         display.set_pen(COLOUR_PEN)
         display.text(f"{tick_val:02.1f}c_", 4, tick_line, scale = 2)
     for graphable_thingy in collection_o_graphable_thingies:
-        plot_line(graphable_thingy.get_data(), baseline, graph_scale, bar_width)
+        plot_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
 
-def write_text_in_a_box(text, TopLeft, width, height, background, ink):
+def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.set_font("bitmap8")
     l_margin = 8
     t_margin = 3
@@ -235,7 +232,7 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink):
     display.rectangle(TopLeft[0], TopLeft[1], width, height)
     # writes the reading as text in the white rectangle
     display.set_pen(ink)
-    display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=3)
+    display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
 
 current_int_temp = get_int_temp()
 current_ext_temp = get_ext_temp()
@@ -243,7 +240,7 @@ cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=c
 temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_ext_temp, prefill=True)
 plot_graphs([cpu_temperatures, temperatures])
 
-graph_update = 60000 # m seconds
+graph_update = 720000 # m seconds
 readout_update = 1000 # m seconds
 ref_time = time.ticks_ms()
 
@@ -276,12 +273,15 @@ while True:
     led_colour = [round(val * 0.05) for val in temperature_to_color(current_ext_temp)]
     led.set_rgb(*led_colour)
 
-    temp_text = "{:.2f}".format(current_ext_temp) + "c"
-    write_text_in_a_box(temp_text, (0, 0), 100, 26, WHITE, BLACK)
+    text = "{:.2f}".format(current_ext_temp) + "c"
+    write_text_in_a_box(text, (0, 0), 100, 26, WHITE, BLACK)
 
     clock = time.localtime()
-    temp_text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-    write_text_in_a_box(temp_text, (200, 0), 120, 26, BLUE, BLACK)
+    text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+    write_text_in_a_box(text, (200, 0), 120, 26, BLUE, BLACK)
+
+    text = "24 hours"
+    write_text_in_a_box(text, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
 
     # time to update the display
     display.update()
