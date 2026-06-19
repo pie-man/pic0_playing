@@ -6,14 +6,21 @@ import time
 from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
-from join_network import wifi_login
+from join_network import wifi_activate, wifi_select
+from info import wifi_creds2
 from set_time_by_ntp import set_time
 
 # set the time..
 try:
-    wifi_login()
+    print("Activating WiFi :")
+    wlan = wifi_activate()
+    print("Getting list of known networks")
+    known_networks = wifi_creds2()
+    print("Selecting and joining...")
+    wifi_select(wlan, known_networks)
+    print("Setting time.")
     set_time()
-except:
+except: # Need better exception handling here, but then network stuff needs that too.
     machine.RTC().datetime((2026, 3, 8, 0, 0, 52, 0, 0))
 
 # set up the display and drawing constants

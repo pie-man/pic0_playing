@@ -1,15 +1,39 @@
 import network
-from info import wifi_creds
+from info import wifi_creds, wifi_creds2
 from pimoroni import RGBLED
 import time
 
 led = RGBLED(26, 27, 28)
 
-def wifi_login():
-    ssid, password = wifi_creds()
-
+def wifi_activate():
+    """Turns on the WiFi"""
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+    return wlan
+
+def wifi_scan(wlan: network.WLAN):
+    """Scans and returns a list of available network SSIDs"""
+    networks = wlan.scan()
+    ssids = []
+    for net in networks:
+        dave = net[0].decode('utf-8')
+        print(f"SSID is {dave}")
+        ssids.append(dave)
+    print(f"Pulled a list of ssids : {ssids}")
+    return ssids
+
+def wifi_select(wlan: network.WLAN, known_networks):
+    """Uses a list of stored credentials to select a network from those available."""
+    for ssid in wifi_scan(wlan):
+        print(f"Looking at {ssid}")
+        if ssid in known_networks:
+            print("Trying to join {ssid}")
+            wifi_login(ssid, known_networks[ssid], wlan)
+            break
+    else:
+        raise(ValueError("Ooops a daisy"))
+
+def wifi_login(ssid, password, wlan:network.WLAN):
     wlan.connect(ssid, password)
 
     max_wait = 11
