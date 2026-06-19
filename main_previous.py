@@ -3,7 +3,7 @@ import time
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2, PEN_RGB565
 from pimoroni import RGBLED
-from join_network import wifi_login
+from join_network import wifi_activate, wifi_select
 from set_time_by_ntp import set_time
 from font_heights import get_font_height
 
@@ -232,7 +232,16 @@ boot_screen = Screen("Preparing", title_font="bitmap8", font_scale = 1, font_thi
 boot_screen.draw_screen()
 boot_screen.draw_in_box(f"Wifi", box_no=5, colour=RED)
 display.update()
-wifi_login()
+# set the time..
+try:
+    print("Activating WiFi :")
+    wlan = wifi_activate()
+    print("Getting list of known networks")
+    known_networks = wifi_creds2()
+    print("Selecting and joining...")
+    wifi_select(wlan, known_networks)
+except: # Need better exception handling here, but then network stuff needs that too.
+    machine.RTC().datetime((2026, 3, 8, 0, 0, 52, 0, 0))
 boot_screen.draw_in_box(f"Wifi", box_no=5, colour=GREEN)
 display.update()
 time.sleep(2)

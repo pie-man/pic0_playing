@@ -23,4 +23,4 @@ wifi_creds = wifi_creds2()
 for net in networks:
     ssid = net[0].decode('utf-8')  # Decode the SSID bytes to a string
     if ssid in wifi_creds:
-        wifi_login(ssid, wifi_creds[ssid])
+        wifi_login(ssid, wifi_creds[ssid], wlan)
