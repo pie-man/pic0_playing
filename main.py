@@ -22,6 +22,9 @@ try:
     set_time()
 except: # Need better exception handling here, but then network stuff needs that too.
     machine.RTC().datetime((2026, 3, 8, 0, 0, 52, 0, 0))
+clock = time.localtime()
+text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+print(f"{text}")
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -142,9 +145,10 @@ class data_buffer(object):
             self.data = []
             
     def add(self, value):
+        if len(self.data) >= self.max_len:
+            # self.data.pop(0)
+            self.data = self.data[1:]
         self.data.append(value)
-        if len(self.data) > self.max_len:
-            self.data.pop(0)
     
     def average(self):
         return sum(self.data) / float(len(self.data))
@@ -262,9 +266,16 @@ plot_graphs([cpu_temperatures, temperatures])
 graph_update = 720000 # m seconds
 readout_update = 1000 # m seconds
 ref_time = time.ticks_ms()
+ref_time2 = time.ticks_ms()
 
-tmp_cpu_temperatures = data_buffer(max_len=(graph_update // readout_update))
-tmp_temperatures = data_buffer(max_len=(graph_update // readout_update))
+# tmp_cpu_temperatures = data_buffer(max_len=(graph_update // readout_update))
+# tmp_temperatures = data_buffer(max_len=(graph_update // readout_update))
+tmp_cpu_temperatures = data_buffer(max_len=60)
+tmp_temperatures = data_buffer(max_len=60)
+
+medium_data_len = (graph_update / readout_update ) // 60
+intermediate_data_cpu = data_buffer(max_len=medium_data_len)
+intermediate_data_ext = data_buffer(max_len=medium_data_len)
 
 while True:
     tm_at_start = time.ticks_ms()
@@ -277,18 +288,25 @@ while True:
     tmp_cpu_temperatures.add(current_int_temp)
     tmp_temperatures.add(current_ext_temp)
 
+    if tm_at_start - ref_time2 >= medium_data_len:
+        # print(f"since last update it has been {(tm_at_start - ref_time)/1000:0.3f}s")
+        overspill = tm_at_start - (ref_time2 + medium_data_len)
+        ref_time2 = tm_at_start + overspill
+        intermediate_data_cpu.add(tmp_cpu_temperatures.average())
+        intermediate_data_ext.add(tmp_temperatures.average())
+        
     # print(f"since ref time it has been {(tm_at_start - ref_time)/1000}s")
     if tm_at_start - ref_time >= graph_update:
         # print(f"since last update it has been {(tm_at_start - ref_time)/1000:0.3f}s")
         overspill = tm_at_start - (ref_time + graph_update)
         ref_time = tm_at_start + overspill
-        cpu_temperatures.add(tmp_cpu_temperatures.average())
-        temperatures.add(tmp_temperatures.average())
+        cpu_temperatures.add(intermediate_data_cpu.average())
+        temperatures.add(intermediate_data_ext.average())
 
     plot_graphs([cpu_temperatures, temperatures])
 
     # heck lets also set the LED to match
-    # But cut the brightness to about 10%
+    # But cut the brightness to about 5%
     led_colour = [round(val * 0.05) for val in temperature_to_color(current_ext_temp)]
     led.set_rgb(*led_colour)
 
