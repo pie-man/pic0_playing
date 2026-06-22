@@ -28,7 +28,30 @@ def set_time():
             print(f"exc.args {exc.args}")
         finally:
             s.close()
-#    val = struct.unpack("!I", msg[40:44])[0]
-#    t = val - NTP_DELTA    
+    if is_it_daylight_saving_time(t):
+        t += 3600
     tm = time.gmtime(t)
     machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+
+def one_am_on_last_sunday_of_the_month(month):
+    # As both March and October have 31 days, we can use the same calculation to determine when the last sunday was
+    tm = time.gmtime()
+    for day in range(31,24,-1):
+        # print(f"today it is {day} of The Month")
+        secs = time.mktime((tm[0], month, day, 1, 0, 0, None, None))
+        DoW = time.gmtime(secs)[6]
+        if DoW == 6:
+            # print(f"The {day}th of October is the last Sunday")
+            return secs
+    else:
+        raise(ValueError("Couldn't find last sunday of month"))
+
+def is_it_daylight_saving_time(t):
+    # British summer time ends at 01:00 gmt (02:00 BST) on the last sunday in october
+    bst_start = one_am_on_last_sunday_of_the_month(3)
+    bst_end = one_am_on_last_sunday_of_the_month(10)
+    # print(f"T is {t}")
+    # print(f"BST start is {bst_start}")
+    # print(f"BST end   is {bst_end}")
+    # print(f"Is it daylight saving time is {t>=bst_start and t<bst_end}")
+    return t >= bst_start and t < bst_end
