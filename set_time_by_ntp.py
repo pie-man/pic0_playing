@@ -22,20 +22,18 @@ def set_time():
             got_time  = True
         except OSError as exc:
             if exc.args[0] == 110: # ETIMEDOUT
-                print(f"Got that Timeout error again...")
+                # print(f"Got that Timeout error again...")
                 time.sleep(2)
                 pass
             print(f"exc.args {exc.args}")
         finally:
+            # print("Reached Finally : Closing socket.")
             s.close()
-    if is_it_daylight_saving_time(t):
-        t += 3600
-    tm = time.gmtime(t)
-    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+    return t
 
-def one_am_on_last_sunday_of_the_month(month):
+def one_am_on_last_sunday_of_the_month(month, time_val):
     # As both March and October have 31 days, we can use the same calculation to determine when the last sunday was
-    tm = time.gmtime()
+    tm = time.gmtime(time_val)
     for day in range(31,24,-1):
         # print(f"today it is {day} of The Month")
         secs = time.mktime((tm[0], month, day, 1, 0, 0, None, None))
@@ -48,8 +46,8 @@ def one_am_on_last_sunday_of_the_month(month):
 
 def is_it_daylight_saving_time(t):
     # British summer time ends at 01:00 gmt (02:00 BST) on the last sunday in october
-    bst_start = one_am_on_last_sunday_of_the_month(3)
-    bst_end = one_am_on_last_sunday_of_the_month(10)
+    bst_start = one_am_on_last_sunday_of_the_month(3, t)
+    bst_end = one_am_on_last_sunday_of_the_month(10, t)
     # print(f"T is {t}")
     # print(f"BST start is {bst_start}")
     # print(f"BST end   is {bst_end}")

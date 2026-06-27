@@ -6,9 +6,9 @@ import time
 from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
-from join_network import wifi_activate, wifi_select
+from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
-from set_time_by_ntp import set_time
+from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 
 
 # set up the display and drawing constants
@@ -249,22 +249,56 @@ try:
     write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
     top_left[1] += 20
-    wifi_select(wlan, known_networks)
+    ssid = wifi_select(wlan, known_networks)
+    time.sleep(1)
+    print(f"Joining Network {ssid}.")
+    write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
+    display.update()
+    top_left[1] += 20
+    wifi_login(ssid, known_networks[ssid], wlan)
     time.sleep(1)
     print("Setting time.")
     write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
     display.update()
     top_left[1] += 30
-    set_time()
+    time_val = set_time(write_text_in_a_box)
+    write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
+    top_left[1] += 30
+    write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+    top_left[1] += 20
+    write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+    display.update()
+    print("here's that line")
+    time.sleep(10)
+    top_left[1] = 10
+    if is_it_daylight_saving_time(time_val):
+        time_val += 3600
+        print("I think it's time to save daylight")
+        write_text_in_a_box("Daylight Saving", [10,70], 310, 30, BLACK, BLUE, 3)
+    else:
+        write_text_in_a_box("Time to give up", [10,70], 310, 30, BLUE, BLACK, 3)
+    print("Here's that other line")
+    time.sleep(5)
+    tm = time.gmtime(time_val)
+    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
     time.sleep(1)
 except: # Need better exception handling here, but then network stuff needs that too.
     machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
+    print("An error has occurred in Setup")
     write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
     display.update()
     time.sleep(10)
 clock = time.localtime()
 text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
 print(f"{text}")
+write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
+top_left[1] += 30
+text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}"
+print(f"{text}")
+write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
+display.update()
+top_left[1] += 30
+time.sleep(10)
 
 graph_ranges = {
     "24 hours" : {},

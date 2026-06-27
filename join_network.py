@@ -17,19 +17,17 @@ def wifi_scan(wlan: network.WLAN):
     ssids = []
     for net in networks:
         dave = net[0].decode('utf-8')
-        print(f"SSID is {dave}")
+        # print(f"SSID is {dave}")
         ssids.append(dave)
-    print(f"Pulled a list of ssids : {ssids}")
+    # print(f"Pulled a list of ssids : {ssids}")
     return ssids
 
 def wifi_select(wlan: network.WLAN, known_networks):
     """Uses a list of stored credentials to select a network from those available."""
     for ssid in wifi_scan(wlan):
-        print(f"Looking at {ssid}")
+        # print(f"Looking at {ssid}")
         if ssid in known_networks:
-            print("Trying to join {ssid}")
-            wifi_login(ssid, known_networks[ssid], wlan)
-            break
+            return ssid
     else:
         raise(ValueError("Ooops a daisy"))
 
@@ -42,20 +40,22 @@ def wifi_login(ssid, password, wlan:network.WLAN):
 
     while max_wait > 0:
         led.set_rgb(0, red_level, blu_level)
-        print(f"wlan.status is : {wlan.status()}")
+        # print(f"wlan.status is : {wlan.status()}")
         if wlan.status() < 0 or wlan.status() >= 3:
-            print(f"wlan.status is : {wlan.status()}")
+            # print(f"wlan.status is : {wlan.status()}")
             break
         max_wait -= 1
         red_level += 5
         blu_level -= 5
-        print('waiting for connection...')
+        # print('waiting for connection...')
         time.sleep(2)
 
     if wlan.status() != 3:
-        led.set_rgb(0, 75, 0)
+        led.set_rgb(75, 0, 0)
+        time.sleep(3)
         raise RuntimeError('network connection failed')
-    else:
-        print('connected')
-        status = wlan.ifconfig()
-        print( 'ip = ' + status[0] )
+        
+    # else:
+    #     print('connected')
+    #     status = wlan.ifconfig()
+    #     print( 'ip = ' + status[0] )
