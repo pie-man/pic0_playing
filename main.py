@@ -261,7 +261,7 @@ try:
     write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
     display.update()
     top_left[1] += 30
-    time_val = set_time(write_text_in_a_box)
+    time_val = set_time()
     write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
     top_left[1] += 30
     write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
