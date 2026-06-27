@@ -10,21 +10,6 @@ from join_network import wifi_activate, wifi_select
 from info import wifi_creds2
 from set_time_by_ntp import set_time
 
-# set the time..
-try:
-    print("Activating WiFi :")
-    wlan = wifi_activate()
-    print("Getting list of known networks")
-    known_networks = wifi_creds2()
-    print("Selecting and joining...")
-    wifi_select(wlan, known_networks)
-    print("Setting time.")
-    set_time()
-except: # Need better exception handling here, but then network stuff needs that too.
-    machine.RTC().datetime((2026, 3, 8, 0, 0, 52, 0, 0))
-clock = time.localtime()
-text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-print(f"{text}")
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -244,6 +229,42 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     # writes the reading as text in the white rectangle
     display.set_pen(ink)
     display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
+
+# set the time..
+try:
+    print("Activating WiFi :")
+    top_left = [10, 10]
+    write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
+    display.update()
+    top_left[1] += 30
+    wlan = wifi_activate()
+    time.sleep(1)
+    print("Getting list of known networks")
+    write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
+    display.update()
+    top_left[1] += 20
+    known_networks = wifi_creds2()
+    time.sleep(1)
+    print("Selecting and joining...")
+    write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
+    display.update()
+    top_left[1] += 20
+    wifi_select(wlan, known_networks)
+    time.sleep(1)
+    print("Setting time.")
+    write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
+    display.update()
+    top_left[1] += 30
+    set_time()
+    time.sleep(1)
+except: # Need better exception handling here, but then network stuff needs that too.
+    machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
+    write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
+    display.update()
+    time.sleep(10)
+clock = time.localtime()
+text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+print(f"{text}")
 
 graph_ranges = {
     "24 hours" : {},
