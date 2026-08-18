@@ -6,6 +6,7 @@ import time
 from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
+from breakout_bme280 import BreakoutBME280
 from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
 from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
@@ -34,13 +35,22 @@ sensor_temp = machine.ADC(4)
 
 # Set up the RGB LED For Display Pack and Display Pack 2.0":
 # led = RGBLED(6, 7, 8)
-
 # For Display Pack 2.8" uncomment the following line and comment out the line above:
 led = RGBLED(26, 27, 28)
 
 conversion_factor = 3.3 / (65535)  # used for calculating a temperature from the raw sensor reading
 
-bme = BreakoutBME69X(machine.I2C(), 0x76)
+try:
+    bme69x = BreakoutBME69X(machine.I2C(), 0x76)
+    got_bme69x = True
+except(RuntimeError): # need to put actual exception if it's not found here..
+    got_bme69x = False
+
+try:
+    bme280 = BreakoutBME280(machine.I2C(), 0x76)
+    got_bme280 = True
+except(RuntimeError): # same again
+    got_bme280 = False
 
 TEMP_MIN = 10
 TEMP_MAX = 34
@@ -67,8 +77,13 @@ temp_limits = [
 # temp_limits = sorted(temp_limits, key=temp_limits[0])
 
 def get_ext_temp():
-    readings = bme.read()
-    temperature = readings[0]
+    if got_bme69x:
+        readings = bme69x.read()
+        temperature = readings[0]
+    elif got_bme280:
+        temperature = bme280.get_temperature()
+    else:
+        temperature = 19.5
     return temperature
 
 def get_int_temp():
