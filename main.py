@@ -81,7 +81,9 @@ def get_ext_temp():
         readings = bme69x.read()
         temperature = readings[0]
     elif got_bme280:
-        temperature = bme280.get_temperature()
+        readings = bme280.read()
+        # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
+        temperature = readings[0]
     else:
         temperature = 19.5
     return temperature
