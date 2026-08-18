@@ -1,7 +1,6 @@
 import socket
 import struct
 import time
-import machine
 
 NTP_DELTA = 2208988800
 host = "pool.ntp.org"
@@ -36,10 +35,11 @@ def one_am_on_last_sunday_of_the_month(month, time_val):
     tm = time.gmtime(time_val)
     for day in range(31,24,-1):
         # print(f"today it is {day} of The Month")
-        secs = time.mktime((tm[0], month, day, 1, 0, 0, None, None))
+        secs = time.mktime((tm[0], month, day, 1, 0, 0, 0, 0))
         DoW = time.gmtime(secs)[6]
         if DoW == 6:
             # print(f"The {day}th of October is the last Sunday")
+            """ Return the seconds from epoch value of 1 am on the last sunday of the month """
             return secs
     else:
         raise(ValueError("Couldn't find last sunday of month"))

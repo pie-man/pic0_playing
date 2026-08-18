@@ -345,7 +345,7 @@ ref_time2 = time.ticks_ms()
 tmp_cpu_temperatures = data_buffer(max_len=60)
 tmp_temperatures = data_buffer(max_len=60)
 
-medium_data_len = (graph_update / readout_update ) // 60
+medium_data_len = int((graph_update / readout_update ) // 60)
 intermediate_data_cpu = data_buffer(max_len=medium_data_len)
 intermediate_data_ext = data_buffer(max_len=medium_data_len)
 

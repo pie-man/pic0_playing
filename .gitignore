@@ -2,3 +2,5 @@ info.py
 *.code-workspace
 interactive.py
 .gitignore
+*.pyc
+.DS_Store
