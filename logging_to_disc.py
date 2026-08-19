@@ -2,14 +2,14 @@
 
 Each instance has a max no of records, and a filename.
 Methods to open, append, clip and close files"""
-import os
 
-class Daniel(object):
+class Log_File(object):
 
     def __init__(self, filename: str, max_len: int, buffer_len: int, keys: list[str]):
         self.name = filename
         self.max_len = max_len
         self.buffer_len = buffer_len
+        self.initial_len = 0
         self.keys = keys
         self.record_len = len(keys)
         self.data = []
@@ -21,7 +21,7 @@ class Daniel(object):
             print("close")
             self.read_data()
             print("read")
-            # self.current_len = len(self.data)
+            self.initial_len = min(len(self.data), max_len)
             print(f"Opened file {filename} and  read {len(self.data)} records")
         except:
             self.current_len = 0
@@ -43,8 +43,9 @@ class Daniel(object):
             else:
                 data_record.append(None)
         self.data.append(data_record)
-        if len_check and len(self.data) > self.max_len + self.buffer_len:
+        if (len_check and len(self.data) > self.initial_len + self.buffer_len):
             self.data = self.data[0-self.max_len:]
+            self.initial_len = len(self.data)
             self.write_data()
 
     def read_data(self):
@@ -67,7 +68,12 @@ class Daniel(object):
                 data_dict = {}
                 data_vals = line.rstrip().split(",")
                 print(f"Data vals point 1 = {data_vals}")
-                data_vals = [x if x !="no value" else None for x in data_vals]
+                timestamp = data_vals[0] if data_vals[0] !="no record" else None
+                records = [float(x) if x !="no record" else None for x in data_vals[1:]]
+                print(f"data_vals[1:] = {data_vals[1:]}")
+                print(f"records = {records}")
+                data_vals = [timestamp]
+                data_vals.extend(records)
                 print(f"Data vals point 2 = {data_vals}")
                 for count, thing in enumerate(file_keys):
                     print(f"Belt n braces, count is {count}")
@@ -75,7 +81,7 @@ class Daniel(object):
                     data_dict[thing] = data_vals[count]
                 self.add_record(data_dict, len_check=False)
                 data_read += 1
-                print(f"read {data_read} bits of data")
+            print(f"read {data_read} bits of data")
 
     def write_data(self):
         """Opens an empty file (potentially overwriting), and dumps the latest self.max_len records
@@ -89,4 +95,9 @@ class Daniel(object):
                 record_as_text = [f"{x}" if x else "no record" for x in record]
                 fh.write(f"{",".join(record_as_text)}\n")
 
-    
+    def get_data(self, key):
+        if key not in self.keys:
+            return []
+        list_index = self.keys.index(key)
+        data = [x[list_index] for x in self.data]
+        return data

@@ -10,6 +10,7 @@ from breakout_bme280 import BreakoutBME280
 from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
 from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
+from logging_to_disc import Log_File
 
 
 # set up the display and drawing constants
@@ -56,7 +57,6 @@ TEMP_MIN = 10
 TEMP_MAX = 34
 bar_width = 2
 
-temperatures = []
 cpu_temperatures = []
 colour_pallette = {
     "RED" : (255, 0 ,0),
@@ -85,7 +85,7 @@ def get_ext_temp():
         # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
         temperature = readings[0]
     else:
-        temperature = 19.5
+        temperature = get_int_temp() - 1.75
     return temperature
 
 def get_int_temp():
@@ -218,8 +218,12 @@ def plot_graphs(collection_o_graphable_thingies):
     max_values = []
     min_values = []
     for graphable_thingy in collection_o_graphable_thingies:
-        max_values.append(graphable_thingy.get_max())
-        min_values.append(graphable_thingy.get_min())
+        if len(graphable_thingy) == 0:
+            return
+        max_values.append(max(graphable_thingy))
+        # max_values.append(graphable_thingy.get_max())
+        # min_values.append(graphable_thingy.get_min())
+        min_values.append(min(graphable_thingy))
     max_t = max(max_values)
     min_t = min(min_values)
     graph_scale, baseline = calc_graph_scale(graph_height, max_t, min_t, accuracy=scale_to_within)
@@ -234,7 +238,8 @@ def plot_graphs(collection_o_graphable_thingies):
         display.set_pen(COLOUR_PEN)
         display.text(f"{tick_val:02.1f}c_", 4, tick_line, scale = 2)
     for graphable_thingy in collection_o_graphable_thingies:
-        plot_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
+        plot_line(plot_window, graphable_thingy, baseline, graph_scale, bar_width)
+        # plot_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
 
 def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.set_font("bitmap8")
@@ -317,37 +322,53 @@ display.update()
 top_left[1] += 30
 time.sleep(10)
 
+graph_points = int(GRAPH_WIDTH // bar_width)
 graph_ranges = {
-    "24 hours" : {},
-    "A week" : {},
-    "8 hours" : {},
-    "Last hour" : {},
-    "12 hours" : {}
+    "24 hours" : {"plot interval" : 720,
+                  "marker scale" : "hours",
+                  "markers" : [0, 6, 12, 18],
+                  "keys" : ["internal temperature", "pressure", "rel_humidity", "external temperature"],
+                  "log" : None,
+                  },
+    # "A week" : {},
+    # "8 hours" : {},
+    "Last hour" : {"plot interval" : 30,
+                  "marker scale" : "mins",
+                  "markers" : [0, 15, 30, 45],
+                  "keys" : ["temperature", "pressure", "rel_humidity"],
+                  "log" : None,
+                  },
+    "12 hours" : {"plot interval" : 360,
+                  "marker scale" : "hours",
+                  "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
+                  "keys" : ["temperature", "pressure", "rel_humidity"],
+                  "log" : None,
+                  },
 }
-current_int_temp = get_int_temp()
+
+for graph_type in graph_ranges.keys():
+    name = f"{graph_type.replace(" ", "_")}.txt"
+    # data_len = graph_ranges[graph_type]["plt_interval"] * graph_points
+    log_keys = ["timestamp"]
+    log_keys.extend(graph_ranges[graph_type]["keys"])
+    new_log = Log_File(name, graph_points, 5, log_keys)
+    graph_ranges[graph_type]["log"] = new_log
+
 current_ext_temp = get_ext_temp()
-cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_int_temp, prefill=True)
-temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width, default_value=current_ext_temp, prefill=True)
-# cpu_temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
-# temperatures = data_buffer(max_len=GRAPH_WIDTH // bar_width)
-# cpu_temperatures.add(current_int_temp)
-# temperatures.add(current_int_temp)
-
-plot_graphs([cpu_temperatures, temperatures])
-
-graph_update = 720000 # m seconds
 readout_update = 1000 # m seconds
-ref_time = time.ticks_ms()
-ref_time2 = time.ticks_ms()
 
-# tmp_cpu_temperatures = data_buffer(max_len=(graph_update // readout_update))
-# tmp_temperatures = data_buffer(max_len=(graph_update // readout_update))
-tmp_cpu_temperatures = data_buffer(max_len=60)
-tmp_temperatures = data_buffer(max_len=60)
-
-medium_data_len = int((graph_update / readout_update ) // 60)
-intermediate_data_cpu = data_buffer(max_len=medium_data_len)
-intermediate_data_ext = data_buffer(max_len=medium_data_len)
+update_count = 0
+change_over = 60
+current_graph = 0
+max_graphs = len(graph_ranges)
+list_o_graphs = graph_ranges.keys()
+all_keys = set()
+for graph in list_o_graphs:
+    for key in graph_ranges[graph]["keys"]:
+        graph_ranges[graph][f"{key}_total"] = 0
+        all_keys.add(key)
+    graph_ranges[graph]["readings_count"] = 0
+    graph_ranges[graph]["last reading"] = time.ticks_ms()
 
 while True:
     tm_at_start = time.ticks_ms()
@@ -355,27 +376,49 @@ while True:
     display.set_pen(BLACK)
     display.clear()
 
-    current_int_temp = get_int_temp()
-    current_ext_temp = get_ext_temp()
-    tmp_cpu_temperatures.add(current_int_temp)
-    tmp_temperatures.add(current_ext_temp)
+    current_data = {}
+    for key in all_keys:
+        if key == "internal temperature":
+            current_data[key] = get_int_temp()
+        elif key == "external temperature" or key == "temperature":
+            current_data[key] = get_ext_temp()
+        else:
+            current_data[key] = None
 
-    if tm_at_start - ref_time2 >= medium_data_len:
-        # print(f"since last update it has been {(tm_at_start - ref_time)/1000:0.3f}s")
-        overspill = tm_at_start - (ref_time2 + medium_data_len)
-        ref_time2 = tm_at_start + overspill
-        intermediate_data_cpu.add(tmp_cpu_temperatures.average())
-        intermediate_data_ext.add(tmp_temperatures.average())
-        
-    # print(f"since ref time it has been {(tm_at_start - ref_time)/1000}s")
-    if tm_at_start - ref_time >= graph_update:
-        # print(f"since last update it has been {(tm_at_start - ref_time)/1000:0.3f}s")
-        overspill = tm_at_start - (ref_time + graph_update)
-        ref_time = tm_at_start + overspill
-        cpu_temperatures.add(intermediate_data_cpu.average())
-        temperatures.add(intermediate_data_ext.average())
-
-    plot_graphs([cpu_temperatures, temperatures])
+    for count, graph in enumerate(list_o_graphs):
+        changed = False
+        for key in current_data.keys():
+            if f"{key}_total" in graph_ranges[graph]:
+                # print(f"Adding current_data[{key if current_data[key] else "bugger all"}] to {graph}[{key}_total]")
+                value = graph_ranges[graph][f"{key}_total"] + current_data[key] if current_data[key] else graph_ranges[graph][f"{key}_total"]
+                graph_ranges[graph][f"{key}_total"] = value
+                changed = True
+        if changed:
+            graph_ranges[graph]["readings_count"] += 1
+        if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
+            clock = time.localtime()
+            text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+            print(f"Adding a new record to {graph} @ {text}")
+            text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+            new_record = {}
+            new_record["timestamp"] = text
+            for key in graph_ranges[graph]["keys"]:
+                new_record[key] = graph_ranges[graph][f"{key}_total"] / graph_ranges[graph]["readings_count"]
+                graph_ranges[graph][f"{key}_total"] = 0
+            graph_ranges[graph]["log"].add_record(new_record)
+            graph_ranges[graph]["last reading"] = time.ticks_ms()
+            graph_ranges[graph]["readings_count"] = 0
+        if count == current_graph:
+            title = graph
+            if graph == "24 hours":
+                plot_graphs([graph_ranges[graph]["log"].get_data("external temperature"), graph_ranges[graph]["log"].get_data("internal temperature")])
+            else:
+                plot_graphs([graph_ranges[graph]["log"].get_data("temperature")])
+    update_count += 1
+    if update_count >= change_over:
+        current_graph += 1
+        current_graph = current_graph % max_graphs
+        update_count = 0
 
     # heck lets also set the LED to match
     # But cut the brightness to about 5%
@@ -389,14 +432,13 @@ while True:
     text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
     write_text_in_a_box(text, (200, 0), 120, 26, BLUE, BLACK)
 
-    text = "24 hours"
-    write_text_in_a_box(text, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
+    write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
 
     # time to update the display
     display.update()
 
     tm_at_end = time.ticks_ms()
-    tm_to_run = tm_at_end - tm_at_start
+    tm_to_run = time.ticks_diff(tm_at_end, tm_at_start)
     delay = readout_update - tm_to_run
     # print(f"Took {tm_to_run}ms to run, will sleep for {delay}ms")
     time.sleep_ms(delay)

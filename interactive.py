@@ -2,7 +2,7 @@ import machine
 import time
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
-from logging_to_disc import Daniel
+from logging_to_disc import Log_File
 
 
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -15,13 +15,21 @@ WHITE = display.create_pen(255, 255, 255)
 BLUE = display.create_pen(100, 100, 200)
 MAGENTA = display.create_pen(200, 100, 200)
 
-bme = BreakoutBME69X(machine.I2C(), 0x76)
+try:
+    bme = BreakoutBME69X(machine.I2C(), 0x76)
+except(RuntimeError):
+    sensor_temp = machine.ADC(4)
+    conversion_factor = 3.3 / (65535)
 
 def get_ext_temp():
     readings = bme.read()
     temperature = readings[0]
     return temperature
 
+def get_int_temp():
+    reading = sensor_temp.read_u16() * conversion_factor
+    temperature = 27 - (reading - 0.706) / 0.001721
+    return temperature
 
 def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.set_font("bitmap8")
@@ -44,14 +52,14 @@ def new_timestamp():
 
 new_timestamp()
 
-log_1 = Daniel("test_file_1", 50, 5, ["timestamp", "temp", "pressure", "pirate value"])
-log_2 = Daniel("test_file_2", 20, 1, ["timestamp", "temp", "pirate value"])
+log_1 = Log_File("test_file_1", 50, 5, ["timestamp", "temp", "pressure", "pirate value"])
+log_2 = Log_File("test_file_2", 20, 1, ["timestamp", "temp", "pirate value"])
 
 pirates = ["Flint", "Vane", "Rackham", "Silver", "Goonsbury"]
 
 for thingy in range(10):
     data_dict = {}
-    data_dict["temp"] = get_ext_temp()
+    data_dict["temp"] = get_int_temp()
     data_dict["timestamp"] = new_timestamp()
     pick_a_pirate = pirates[thingy % len(pirates)]
     data_dict["pirate value"] = pick_a_pirate
