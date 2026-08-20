@@ -14,20 +14,20 @@ class Log_File(object):
         self.record_len = len(keys)
         self.data = []
         try:
-            print("Starter for 10")
+            print(f"Starter for 10 : {filename}")
             fh = open(filename, "r")
-            print("open")
+            # print("open")
             fh.close()
-            print("close")
+            # print("close")
             self.read_data()
-            print("read")
-            self.initial_len = min(len(self.data), max_len)
+            # print("read")
             print(f"Opened file {filename} and  read {len(self.data)} records")
         except:
             self.current_len = 0
             print(f"something failed trying to open file {filename}")
-        print("The dust is settling")
+        # print("The dust is settling")
         self.current_len = len(self.data)
+        self.initial_len = min(len(self.data), max_len)
 
     def add_record(self, data_dict, len_check=True):
         """Passed a dictionary of name:value data pairs, stores those where 'name' exists
@@ -56,28 +56,28 @@ class Log_File(object):
         selected in self.keys will become part of a record, and those not given in self.keys will be discarded
         Ultimately this allows for changes in mind of the contents of data logs with the potential to discard data types
         no longer used, and populate historic records with None entries when new data types are added."""
-        print("reading...")
+        print(f"reading...  {self.name}")
         with open(self.name, "r") as fh:
-            print("open..")
+            # print("open..")
             keys_as_text = fh.readline().strip()
             print(f"read keys as : {keys_as_text}")
             file_keys = keys_as_text.split(",")
             data_read = 0
             for line in fh:
-                print(f"reading a line: {line}")
+                # print(f"reading a line: {line}")
                 data_dict = {}
                 data_vals = line.rstrip().split(",")
-                print(f"Data vals point 1 = {data_vals}")
+                # print(f"Data vals point 1 = {data_vals}")
                 timestamp = data_vals[0] if data_vals[0] !="no record" else None
                 records = [float(x) if x !="no record" else None for x in data_vals[1:]]
-                print(f"data_vals[1:] = {data_vals[1:]}")
-                print(f"records = {records}")
+                # print(f"data_vals[1:] = {data_vals[1:]}")
+                # print(f"records = {records}")
                 data_vals = [timestamp]
                 data_vals.extend(records)
-                print(f"Data vals point 2 = {data_vals}")
+                # print(f"Data vals point 2 = {data_vals}")
                 for count, thing in enumerate(file_keys):
-                    print(f"Belt n braces, count is {count}")
-                    print(f"Setting {thing} to {data_vals[count]}")
+                    # print(f"Belt n braces, count is {count}")
+                    # print(f"Setting {thing} to {data_vals[count]}")
                     data_dict[thing] = data_vals[count]
                 self.add_record(data_dict, len_check=False)
                 data_read += 1
