@@ -266,7 +266,12 @@ try:
     display.update()
     top_left[1] += 20
     known_networks = wifi_creds2()
+    print(f"Got details for {len(known_networks)} networks")
+    write_text_in_a_box(f"Got details for {len(known_networks)} networks", top_left, 310, 30, BLACK, BLUE, 2)
+    for doodah in known_networks.keys():
+        print(f"...  {doodah} ?")
     time.sleep(1)
+    top_left[1] += 20
     print("Selecting and joining...")
     write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
