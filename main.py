@@ -7,9 +7,7 @@ from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from breakout_bme280 import BreakoutBME280
-from join_network import wifi_activate, wifi_select, wifi_login
-from info import wifi_creds2
-from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
+from setup_device import write_text_in_a_box, old_setup_copy_n_paste
 from logging_to_disc import Log_File
 
 
@@ -241,86 +239,7 @@ def plot_graphs(collection_o_graphable_thingies):
         plot_line(plot_window, graphable_thingy, baseline, graph_scale, bar_width)
         # plot_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
 
-def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
-    display.set_font("bitmap8")
-    l_margin = 8
-    t_margin = 3
-    # draws a white background for the text
-    display.set_pen(background)
-    display.rectangle(TopLeft[0], TopLeft[1], width, height)
-    # writes the reading as text in the white rectangle
-    display.set_pen(ink)
-    display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
-
-# set the time..
-try:
-    print("Activating WiFi :")
-    top_left = [10, 10]
-    write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    top_left[1] += 30
-    wlan = wifi_activate()
-    time.sleep(1)
-    print("Getting list of known networks")
-    write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    known_networks = wifi_creds2()
-    time.sleep(1)
-    print("Selecting and joining...")
-    write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    ssid = wifi_select(wlan, known_networks)
-    time.sleep(1)
-    print(f"Joining Network {ssid}.")
-    write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    wifi_login(ssid, known_networks[ssid], wlan)
-    time.sleep(1)
-    print("Setting time.")
-    write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    top_left[1] += 30
-    time_val = set_time()
-    write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
-    top_left[1] += 30
-    write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
-    top_left[1] += 20
-    write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    print("here's that line")
-    time.sleep(10)
-    top_left[1] = 10
-    if is_it_daylight_saving_time(time_val):
-        time_val += 3600
-        print("I think it's time to save daylight")
-        write_text_in_a_box("Daylight Saving", [10,70], 310, 30, BLACK, BLUE, 3)
-    else:
-        write_text_in_a_box("Time to give up", [10,70], 310, 30, BLUE, BLACK, 3)
-    print("Here's that other line")
-    time.sleep(5)
-    tm = time.gmtime(time_val)
-    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
-    time.sleep(1)
-except: # Need better exception handling here, but then network stuff needs that too.
-    machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
-    print("An error has occurred in Setup")
-    write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    time.sleep(10)
-clock = time.localtime()
-text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-print(f"{text}")
-write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
-top_left[1] += 30
-text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}"
-print(f"{text}")
-write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
-display.update()
-top_left[1] += 30
-time.sleep(10)
+old_setup_copy_n_paste(display, machine, BLACK, BLUE)
 
 graph_points = int(GRAPH_WIDTH // bar_width)
 graph_ranges = {
@@ -426,13 +345,13 @@ while True:
     led.set_rgb(*led_colour)
 
     text = "{:.2f}".format(current_ext_temp) + "c"
-    write_text_in_a_box(text, (0, 0), 100, 26, WHITE, BLACK)
+    write_text_in_a_box(display, text, (0, 0), 100, 26, WHITE, BLACK)
 
     clock = time.localtime()
     text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-    write_text_in_a_box(text, (200, 0), 120, 26, BLUE, BLACK)
+    write_text_in_a_box(display, text, (200, 0), 120, 26, BLUE, BLACK)
 
-    write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
+    write_text_in_a_box(display, title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
 
     # time to update the display
     display.update()
