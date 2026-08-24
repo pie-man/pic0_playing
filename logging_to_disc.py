@@ -64,7 +64,7 @@ class Log_File(object):
             file_keys = keys_as_text.split(",")
             data_read = 0
             for line in fh:
-                print(f"reading a line: {line}")
+                # print(f"reading a line: {line}")
                 data_dict = {}
                 data_vals = line.rstrip().split(",")
                 # print(f"Data vals point 1 = {data_vals}")
