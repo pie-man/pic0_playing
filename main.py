@@ -376,6 +376,9 @@ while True:
     display.set_pen(BLACK)
     display.clear()
 
+    current_ext_temp = get_ext_temp()
+    current_int_temp = get_int_temp()
+
     current_data = {}
     # Take Sensor readings
     current_ext_temp = get_ext_temp()
