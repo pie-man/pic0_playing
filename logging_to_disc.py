@@ -64,20 +64,20 @@ class Log_File(object):
             file_keys = keys_as_text.split(",")
             data_read = 0
             for line in fh:
-                print(f"reading a line: {line}")
+                # print(f"reading a line: {line}")
                 data_dict = {}
                 data_vals = line.rstrip().split(",")
-                print(f"Data vals point 1 = {data_vals}")
+                # print(f"Data vals point 1 = {data_vals}")
                 timestamp = data_vals[0] if data_vals[0] !="no record" else None
                 records = [float(x) if x !="no record" else None for x in data_vals[1:]]
-                print(f"data_vals[1:] = {data_vals[1:]}")
-                print(f"records = {records}")
+                # print(f"data_vals[1:] = {data_vals[1:]}")
+                # print(f"records = {records}")
                 data_vals = [timestamp]
                 data_vals.extend(records)
-                print(f"Data vals point 2 = {data_vals}")
+                # print(f"Data vals point 2 = {data_vals}")
                 for count, thing in enumerate(file_keys):
-                    print(f"Belt n braces, count is {count}")
-                    print(f"Setting {thing} to {data_vals[count]}")
+                    # print(f"Belt n braces, count is {count}")
+                    # print(f"Setting {thing} to {data_vals[count]}")
                     data_dict[thing] = data_vals[count]
                 self.add_record(data_dict, len_check=False)
                 data_read += 1

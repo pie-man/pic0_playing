@@ -295,12 +295,15 @@ while True:
     display.set_pen(BLACK)
     display.clear()
 
+    current_ext_temp = get_ext_temp()
+    current_int_temp = get_int_temp()
+
     current_data = {}
     for key in all_keys:
         if key == "internal temperature":
-            current_data[key] = get_int_temp()
+            current_data[key] = current_int_temp
         elif key == "external temperature" or key == "temperature":
-            current_data[key] = get_ext_temp()
+            current_data[key] = current_ext_temp
         else:
             current_data[key] = None
 
@@ -317,7 +320,7 @@ while True:
         if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
             clock = time.localtime()
             text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            print(f"Adding a new record to {graph} @ {text}")
+            # print(f"Adding a new record to {graph} @ {text}")
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
             new_record = {}
             new_record["timestamp"] = text
