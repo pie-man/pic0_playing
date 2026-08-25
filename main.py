@@ -296,9 +296,9 @@ try:
     if is_it_daylight_saving_time(time_val):
         time_val += 3600
         print("I think it's time to save daylight")
-        write_text_in_a_box("Daylight Saving", [10,70], 310, 30, BLACK, BLUE, 3)
+        write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
     else:
-        write_text_in_a_box("Time to give up", [10,70], 310, 30, BLUE, BLACK, 3)
+        write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
     print("Here's that other line")
     time.sleep(5)
     tm = time.gmtime(time_val)
@@ -312,11 +312,11 @@ except: # Need better exception handling here, but then network stuff needs that
     time.sleep(10)
 clock = time.localtime()
 text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-print(f"{text}")
+# print(f"{text}")
 write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
 top_left[1] += 30
 text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}"
-print(f"{text}")
+# print(f"{text}")
 write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
 display.update()
 top_left[1] += 30
@@ -376,10 +376,12 @@ while True:
     display.set_pen(BLACK)
     display.clear()
 
+    current_data = {}
+    # Take Sensor readings
     current_ext_temp = get_ext_temp()
     current_int_temp = get_int_temp()
 
-    current_data = {}
+
     for key in all_keys:
         if key == "internal temperature":
             current_data[key] = current_int_temp
@@ -400,7 +402,7 @@ while True:
             graph_ranges[graph]["readings_count"] += 1
         if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
             clock = time.localtime()
-            text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+            # text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
             # print(f"Adding a new record to {graph} @ {text}")
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
             new_record = {}
