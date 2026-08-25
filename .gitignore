@@ -4,3 +4,4 @@ interactive.py
 .gitignore
 *.pyc
 .DS_Store
+local_config.py
