@@ -9,9 +9,9 @@ from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from breakout_bme280 import BreakoutBME280
 from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
+from local_config import hardware
 from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 from logging_to_disc import Log_File
-
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -34,10 +34,8 @@ MAGENTA = display.create_pen(200, 100, 200)
 # set up the internal temperature sensor
 sensor_temp = machine.ADC(4)
 
-# Set up the RGB LED For Display Pack and Display Pack 2.0":
-# led = RGBLED(6, 7, 8)
-# For Display Pack 2.8" uncomment the following line and comment out the line above:
-led = RGBLED(26, 27, 28)
+# hardware is a dictionary read in from local_config.py. The "LED_pins" key must be deined there.
+led = RGBLED(*hardware["LED_pins"])
 
 conversion_factor = 3.3 / (65535)  # used for calculating a temperature from the raw sensor reading
 
