@@ -3,6 +3,7 @@ import time
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from logging_to_disc import Log_File
+from setup_device import info_logger, info_log_message
 
 
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -51,6 +52,35 @@ def new_timestamp():
     return text
 
 new_timestamp()
+
+setup_logs = info_logger(BLACK, "higgedy", 2, 12)
+
+setup_logs.add_log("message 1 is pointless", 3)
+setup_logs.add_log("So is message 2 pointless", 2)
+setup_logs.add_log("message 3 is also pointless")
+setup_logs.add_log("message 5 is completely pointless", 3)
+setup_logs.add_log("What happened to message 4 ?", 3)
+setup_logs.add_log("Ahhh, there it is", 3)
+now = time.localtime()
+text = f"{now[0]:04}/{now[1]:02}/{now[2]:02}@{now[3]:02}:{now[4]:02}:{now[5]:02}"
+setup_logs.add_log(text, 2, "different font")
+setup_logs.add_log("message 8 is pointless", 3)
+setup_logs.add_log("message 9 is pointless", 3)
+setup_logs.add_log("message 10 is pointless", 3)
+now = time.localtime()
+text = f"{now[0]:04}/{now[1]:02}/{now[2]:02}@{now[3]:02}:{now[4]:02}:{now[5]:02}"
+setup_logs.add_log(text, 3)
+setup_logs.display_logs(4)
+time.sleep(4)
+now = time.localtime()
+text = f"{now[0]:04}/{now[1]:02}/{now[2]:02}@{now[3]:02}:{now[4]:02}:{now[5]:02}"
+setup_logs.add_log(f"message 10 is {text}", 3)
+time.sleep(2.5)
+now = time.localtime()
+text = f"{now[0]:04}/{now[1]:02}/{now[2]:02}@{now[3]:02}:{now[4]:02}:{now[5]:02}"
+setup_logs.add_log(f"message 13 is {text}", 3)
+setup_logs.display_logs()
+time.sleep(2)
 
 log_1 = Log_File("test_file_1", 50, 5, ["timestamp", "temp", "pressure", "pirate value"])
 log_2 = Log_File("test_file_2", 20, 1, ["timestamp", "temp", "pirate value"])

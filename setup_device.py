@@ -29,6 +29,55 @@ from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
 from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 
+class info_log_message(object):
+    def __init__(self, message, font, scale):
+        self.message = message
+        self.font = font
+        self.scale = scale
+        self.height_reqd = self.calc_text_height(message, font, scale)
+
+    @classmethod
+    def calc_text_height(cls, message, font, scale):
+        print(f"Calculating text height from : {message} in {font} @ {scale}")
+        return 10
+
+class info_logger(object):
+    def __init__(self, background, font, scale, max_len=10, prefill=False):
+        self.max_len = max_len
+        self.background = background
+        self.default_font = font
+        self.default_scale = scale
+        self.logs = []
+        self.prefil = prefill
+
+    def add_log(self, new_message, scale=0, font=None):
+        """Add's a new message to the list displayed with an optionally set size/scale.
+        A scale of zero allows the routine to automaticvally select the text size"""
+        print(f"Adding {new_message} to message list at scale {scale}")
+        if font is None:
+            font = self.default_font # use the default for this log
+        new_log = info_log_message(new_message, font, scale)
+        self.logs.append(new_log)
+        self.logs = self.logs[0-self.max_len:]
+        print(f"This logger now contains {len(self.logs)} messages :")
+        for count, log in enumerate(self.logs):
+            print(f"{count:02} : \"{log.message}\" in {log.font} @ scale {log.scale}")
+
+    def display_logs(self, duration=3):
+        """Displays the most recent logs until the screen is full for an overridable display time."""
+        print(f"Displaying logs for {duration} seconds")
+        screen_height = 100
+        height_used = 0
+        logs_to_display = []
+        for log in self.logs[::-1]:
+            if height_used + log.height_reqd <= screen_height:
+                height_used += log.height_reqd
+                logs_to_display.append(log)
+            else:
+                break
+        for log in logs_to_display[::-1]:
+            print(f"\"{log.message}\" in {log.font} @ scale {log.scale}")
+
 def write_text_in_a_box(display, text, TopLeft, width, height, background, ink, scale=3):
     """Does a 'display' instnace need to be passed into this ?
     It seems less than ideal to use one and it's associated methods from 'global' data.."""
