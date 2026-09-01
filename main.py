@@ -3,15 +3,17 @@
 
 import machine
 import time
+import gc
 from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from breakout_bme280 import BreakoutBME280
-from join_network import wifi_activate, wifi_select, wifi_login
+# from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
 from local_config import hardware
-from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
+# from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 from logging_to_disc import Log_File
+import onewire, ds18x20, binascii
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -31,7 +33,7 @@ BLUE = display.create_pen(100, 100, 200)
 MAGENTA = display.create_pen(200, 100, 200)
 
     
-# set up the internal temperature sensor
+# set up the cpu temperature sensor
 sensor_temp = machine.ADC(4)
 
 # hardware is a dictionary read in from local_config.py. The "LED_pins" key must be deined there.
@@ -50,6 +52,20 @@ try:
     got_bme280 = True
 except(RuntimeError): # same again
     got_bme280 = False
+
+try:
+    ds_pin = machine.Pin(0)
+    ds_sensor = ds18x20.DS18X20(onewire.OneWire(ds_pin))
+    got_ds18t20 = True
+    thermometers = ds_sensor.scan()
+except(RuntimeError): # same again
+    got_ds18t20 = False
+    thermometers = []
+thermometer_names = {
+     "mug" : "28b9fefa050000d4",
+     "cup" : "28e81dfb050000d6",
+     "air" : "28828beb050000c9",
+}
 
 TEMP_MIN = 10
 TEMP_MAX = 34
@@ -74,7 +90,18 @@ temp_limits = [
 ]
 # temp_limits = sorted(temp_limits, key=temp_limits[0])
 
-def get_ext_temp():
+def free(full=False):
+    F = gc.mem_free()
+    A = gc.mem_alloc()
+    T = F + A
+    print(f"Pre  Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+    gc.collect()
+    F = gc.mem_free()
+    A = gc.mem_alloc()
+    T = F + A
+    print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+
+def get_bme_temp():
     if got_bme69x:
         readings = bme69x.read()
         temperature = readings[0]
@@ -83,13 +110,25 @@ def get_ext_temp():
         # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
         temperature = readings[0]
     else:
-        temperature = get_int_temp() - 1.75
+        temperature = get_cpu_temp() - 1.75
     return temperature
 
-def get_int_temp():
+def get_cpu_temp():
     reading = sensor_temp.read_u16() * conversion_factor
     temperature = 27 - (reading - 0.706) / 0.001721
     return temperature
+
+def get_remote_temps(ds18b20_thermometers):
+    ds_sensor.convert_temp()
+    time.sleep_ms(750)
+    temperatures = {}
+    for thermometer in ds18b20_thermometers:
+        thermometer_id_hex = binascii.hexlify(thermometer)
+        thermometer_id = thermometer_id_hex.decode('ascii')
+        temperature = ds_sensor.read_temp(thermometer)
+        # print(f"Read {thermometer_id} got a reading of {temperature}")
+        temperatures[thermometer_id] = temperature
+    return temperatures
 
 def scale_temp(temp, temp_min=TEMP_MIN, temp_max=TEMP_MAX):
     scale = HEIGHT / (temp_max - temp_min)
@@ -177,11 +216,11 @@ def calc_rectangle_colour(temp, prev_temp):
     colour_temp = temperature_to_color(mid_temp)
     return colour_temp
 
-def calc_graph_scale(graph_height, temp_max, temp_min, min_scale=3, accuracy=1.0):
+def calc_graph_scale(graph_height, temp_max, temp_min, min_scale=2, accuracy=1.0):
     """Given a graph_heigt in pixels along with maximum and minimum teperaturtes,
     This routine returns the baseline temperature and a scaling factor to convert
     temperature differences into pixels.
-    min_scale, default=3, is the minimum difference from baseline to the top in degrees
+    min_scale, default=2, is the minimum difference from baseline to the top in degrees
     accuracy, default = 1, defines the floor below min_temp in degrees"""
     baseline = (temp_min // accuracy ) * accuracy
     difference = max(min_scale, abs(temp_max - baseline))
@@ -257,7 +296,7 @@ try:
     write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
     display.update()
     top_left[1] += 30
-    wlan = wifi_activate()
+    # wlan = wifi_activate()
     time.sleep(1)
     print("Getting list of known networks")
     write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
@@ -269,38 +308,40 @@ try:
     write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
     top_left[1] += 20
-    ssid = wifi_select(wlan, known_networks)
+    # ssid = wifi_select(wlan, known_networks)
+    ssid = "Rhaggy ?"
     time.sleep(1)
     print(f"Joining Network {ssid}.")
     write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
     top_left[1] += 20
-    wifi_login(ssid, known_networks[ssid], wlan)
+    # wifi_login(ssid, known_networks[ssid], wlan)
     time.sleep(1)
     print("Setting time.")
     write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
     display.update()
     top_left[1] += 30
-    time_val = set_time()
+    # time_val = set_time()
     write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
     top_left[1] += 30
-    write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+    # write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
     top_left[1] += 20
-    write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+    # write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
     print("here's that line")
     time.sleep(10)
     top_left[1] = 10
-    if is_it_daylight_saving_time(time_val):
-        time_val += 3600
-        print("I think it's time to save daylight")
-        write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
-    else:
-        write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
+    # if is_it_daylight_saving_time(time_val):
+    #     time_val += 3600
+    #     print("I think it's time to save daylight")
+    #     write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
+    # else:
+    #     write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
     print("Here's that other line")
     time.sleep(5)
-    tm = time.gmtime(time_val)
-    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+    # tm = time.gmtime(time_val)
+    # machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+    machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
     time.sleep(1)
 except: # Need better exception handling here, but then network stuff needs that too.
     machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
@@ -325,7 +366,7 @@ graph_ranges = {
     "24 hours" : {"plot interval" : 720,
                   "marker scale" : "hours",
                   "markers" : [0, 6, 12, 18],
-                  "keys" : ["internal temperature", "pressure", "rel_humidity", "external temperature"],
+                  "keys" : ["cpu temperature", "pressure", "rel_humidity", "bme temperature"],
                   "log" : None,
                   },
     # "A week" : {},
@@ -339,7 +380,7 @@ graph_ranges = {
     "12 hours" : {"plot interval" : 360,
                   "marker scale" : "hours",
                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
-                  "keys" : ["temperature", "pressure", "rel_humidity"],
+                  "keys" : ["temperature", "pressure", "rel_humidity", "mug", "cup", "air"],
                   "log" : None,
                   },
 }
@@ -349,17 +390,18 @@ for graph_type in graph_ranges.keys():
     # data_len = graph_ranges[graph_type]["plt_interval"] * graph_points
     log_keys = ["timestamp"]
     log_keys.extend(graph_ranges[graph_type]["keys"])
+    free()
     new_log = Log_File(name, graph_points, 5, log_keys)
     graph_ranges[graph_type]["log"] = new_log
 
-current_ext_temp = get_ext_temp()
+current_bme_temp = get_bme_temp()
 readout_update = 1000 # m seconds
 
 update_count = 0
 change_over = 60
 current_graph = 0
 max_graphs = len(graph_ranges)
-list_o_graphs = graph_ranges.keys()
+list_o_graphs = list(graph_ranges.keys())
 all_keys = set()
 for graph in list_o_graphs:
     for key in graph_ranges[graph]["keys"]:
@@ -376,15 +418,18 @@ while True:
 
     current_data = {}
     # Take Sensor readings
-    current_ext_temp = get_ext_temp()
-    current_int_temp = get_int_temp()
+    current_bme_temp = get_bme_temp()
+    current_cpu_temp = get_cpu_temp()
 
+    remote_temperatures = get_remote_temps(thermometers)
 
     for key in all_keys:
-        if key == "internal temperature":
-            current_data[key] = current_int_temp
-        elif key == "external temperature" or key == "temperature":
-            current_data[key] = current_ext_temp
+        if key == "cpu temperature":
+            current_data[key] = current_cpu_temp
+        elif key == "bme temperature" or key == "temperature":
+            current_data[key] = current_bme_temp
+        elif (key == "mug" or key == "cup" or key == "air"):
+            current_data[key] = remote_temperatures[thermometer_names[key]]
         else:
             current_data[key] = None
 
@@ -401,7 +446,8 @@ while True:
         if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
             clock = time.localtime()
             # text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            # print(f"Adding a new record to {graph} @ {text}")
+            print(f"Adding a new record to {graph} @ {text}")
+            free()
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
             new_record = {}
             new_record["timestamp"] = text
@@ -414,7 +460,9 @@ while True:
         if count == current_graph:
             title = graph
             if graph == "24 hours":
-                plot_graphs([graph_ranges[graph]["log"].get_data("external temperature"), graph_ranges[graph]["log"].get_data("internal temperature")])
+                plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cpu temperature")])
+            if graph == "12 hours":
+                plot_graphs([graph_ranges[graph]["log"].get_data("mug"), graph_ranges[graph]["log"].get_data("cup"), graph_ranges[graph]["log"].get_data("air")])
             else:
                 plot_graphs([graph_ranges[graph]["log"].get_data("temperature")])
     update_count += 1
@@ -422,13 +470,14 @@ while True:
         current_graph += 1
         current_graph = current_graph % max_graphs
         update_count = 0
+        print(f"Changing graph to display \"{list_o_graphs[current_graph]}\"")
 
     # heck lets also set the LED to match
     # But cut the brightness to about 5%
-    led_colour = [round(val * 0.05) for val in temperature_to_color(current_ext_temp)]
+    led_colour = [round(val * 0.05) for val in temperature_to_color(current_bme_temp)]
     led.set_rgb(*led_colour)
 
-    text = "{:.2f}".format(current_ext_temp) + "c"
+    text = "{:.2f}".format(current_bme_temp) + "c"
     write_text_in_a_box(text, (0, 0), 100, 26, WHITE, BLACK)
 
     clock = time.localtime()
