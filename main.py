@@ -3,6 +3,7 @@
 
 import machine
 import time
+import gc
 from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
@@ -12,6 +13,7 @@ from info import wifi_creds2
 from local_config import hardware
 from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 from logging_to_disc import Log_File
+import onewire, ds18x20, binascii
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -31,7 +33,7 @@ BLUE = display.create_pen(100, 100, 200)
 MAGENTA = display.create_pen(200, 100, 200)
 
     
-# set up the internal temperature sensor
+# set up the cpu temperature sensor
 sensor_temp = machine.ADC(4)
 
 # hardware is a dictionary read in from local_config.py. The "LED_pins" key must be deined there.
@@ -51,8 +53,19 @@ try:
 except(RuntimeError): # same again
     got_bme280 = False
 
-TEMP_MIN = 10
-TEMP_MAX = 34
+try:
+    ds_pin = machine.Pin(0)
+    ds_sensor = ds18x20.DS18X20(onewire.OneWire(ds_pin))
+    got_ds18t20 = True
+    thermometers = ds_sensor.scan()
+except(RuntimeError): # same again
+    got_ds18t20 = False
+    thermometers = []
+thermometer_names = {
+     "mug" : "28b9fefa050000d4",
+     "cup" : "28e81dfb050000d6",
+     "air" : "28828beb050000c9",
+}
 bar_width = 2
 
 cpu_temperatures = []
@@ -74,7 +87,18 @@ temp_limits = [
 ]
 # temp_limits = sorted(temp_limits, key=temp_limits[0])
 
-def get_ext_temp():
+def free(full=False):
+    # F = gc.mem_free()
+    # A = gc.mem_alloc()
+    # T = F + A
+    # print(f"Pre  Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+    gc.collect()
+    # F = gc.mem_free()
+    # A = gc.mem_alloc()
+    # T = F + A
+    # print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+
+def get_bme_temp():
     if got_bme69x:
         readings = bme69x.read()
         temperature = readings[0]
@@ -83,18 +107,28 @@ def get_ext_temp():
         # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
         temperature = readings[0]
     else:
-        temperature = get_int_temp() - 1.75
+        temperature = get_cpu_temp() - 1.75
     return temperature
 
-def get_int_temp():
+def get_cpu_temp():
     reading = sensor_temp.read_u16() * conversion_factor
     temperature = 27 - (reading - 0.706) / 0.001721
     return temperature
 
-def scale_temp(temp, temp_min=TEMP_MIN, temp_max=TEMP_MAX):
-    scale = HEIGHT / (temp_max - temp_min)
-    scaled_temp = (temp - temp_min) * scale
-    return scaled_temp
+def get_remote_temps(ds18b20_thermometers):
+    ds_sensor.convert_temp()
+    time.sleep_ms(750)
+    temperatures = {}
+    for thermometer in ds18b20_thermometers:
+        thermometer_id_hex = binascii.hexlify(thermometer)
+        thermometer_id = thermometer_id_hex.decode('ascii')
+        try:
+            temperature = ds_sensor.read_temp(thermometer)
+        except:
+            temperature = None
+        # print(f"Read {thermometer_id} got a reading of {temperature}")
+        temperatures[thermometer_id] = temperature
+    return temperatures
 
 def temperature_to_color(temp):
     upper_reg = temp_limits[-1][0]
@@ -136,6 +170,9 @@ def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
         prev_t = t
 
 class data_buffer(object):
+    """Originally conceived as a FIFO list to limit the size of gathered data
+    Suspect this is now redundent(ish) as something similar is now done in 
+    logging to disc module and no instances of this class are created."""
     def __init__(self, max_len=10, default_value=0.0, prefill=False):
         self.max_len = max_len
         self.default_value = default_value
@@ -165,7 +202,10 @@ class data_buffer(object):
     def get_data(self):
         return self.data
 
-def calc_rectangle_coords(temp, prev_temp, graph_height=GRAPH_HEIGHT, baseline=TEMP_MIN, scale=10):
+def calc_rectangle_coords(temp, prev_temp, graph_height, baseline, scale=10):
+    """Rather clever, if I do say so myself, but ultimately completely redundant
+    routine to create a floating rectangle to join the current reading to the previous vertically.
+    Display pack has a 'draw a line from A to B which would have been much better to use..."""
     upper_temp = max(temp, prev_temp) - baseline
     difference = abs(temp - prev_temp)
     top = graph_height - round(upper_temp * scale) - 2
@@ -173,32 +213,42 @@ def calc_rectangle_coords(temp, prev_temp, graph_height=GRAPH_HEIGHT, baseline=T
     return top, rect_height
 
 def calc_rectangle_colour(temp, prev_temp):
+    """Picks the appropriate 'colour' from the midpoint of two values (temperatures)"""
     mid_temp = min(temp, prev_temp) + abs(temp - prev_temp) / 2.0
     colour_temp = temperature_to_color(mid_temp)
     return colour_temp
 
-def calc_graph_scale(graph_height, temp_max, temp_min, min_scale=3, accuracy=1.0):
-    """Given a graph_heigt in pixels along with maximum and minimum teperaturtes,
-    This routine returns the baseline temperature and a scaling factor to convert
-    temperature differences into pixels.
-    min_scale, default=3, is the minimum difference from baseline to the top in degrees
-    accuracy, default = 1, defines the floor below min_temp in degrees"""
-    baseline = (temp_min // accuracy ) * accuracy
-    difference = max(min_scale, abs(temp_max - baseline))
-    scale = ((graph_height / difference) // accuracy ) * accuracy
-    # print(f"temp_min = {temp_min}, baseline = {baseline}, "
-        #   f"temp_max = {temp_max}, raw scale = {graph_height / abs(temp_max - baseline)}")
-    # print(f"with graph_height {graph_height} and scale {scale}, max temp would be {(temp_max - baseline) * scale}")
+def calc_graph_scale(graph_height, max_value, min_value, accuracy=1.0):
+    """Given a graph_heigt in pixels along with maximum and minimum values,
+    This routine returns the baseline value and a scaling factor to convert
+    differences into pixels.
+    min_scale, default=2, is the minimum difference from baseline to the top.
+    accuracy, default = 1, defines the floor below min_value"""
+    # baseline is the 'floor' below 'min' to an accuracy of 'accuracy'
+    baseline = (min_value // accuracy ) * accuracy
+    topline = ((max_value // accuracy) + 1) * accuracy
+    difference = max(accuracy * 2.0, abs(topline - baseline))
+    order = 100 / difference
+    scale = (graph_height / difference) * order * 10 + 1
+    scale = scale // order / 10
+    # print(f"min_value = {min_value}, baseline = {baseline}, "
+    #       f"max_value = {max_value}, topline = {topline}, "
+    #       f"raw scale = {graph_height / abs(topline - baseline)}")
+    # print(f"with graph_height {graph_height} and scale {scale}, max temp would be {baseline + (graph_height / scale)}")
     return scale, baseline
 
 def calc_tick_marks(graph_height, graph_scale):
-    temp_range = graph_height / graph_scale
-    # print(f"I think the temp range is {temp_range}")
-    max_tick_marks = graph_height // 36
+    """This appears to work, for most cases - but needs thought...
+    It also needs to clear it's background before drawing as if the graph is updated between 'changes' of plot type
+    the the new scale draws over the top of the old one and looks really weird."""
+    value_range = graph_height / graph_scale
+    # print(f"I think the temp range is {value_range}")
+    max_tick_marks = graph_height // 30 # Where tF does (the original value of) 36 come from ? could it be twice text height plus a small margin ?
     # print(f"I think I can squeeze in {max_tick_marks} ticks")
-    tick_spacing = max(0.1, temp_range / max_tick_marks)
-    # print(f"tick marks every {tick_spacing} degrees")
-    upper_limit = int((GRAPH_HEIGHT // graph_scale) *10)
+    tick_spacing = max(0.1, value_range / max_tick_marks) # '0.1' ?  posibly 1dp, but WTaF
+    tick_spacing = value_range / max_tick_marks # try again, without the 'max' test...
+    # print(f"tick marks every {tick_spacing} units")
+    upper_limit = int(value_range *10)
     int_tick_spacing = int(tick_spacing * 10)
     # print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
     tick_marks = [x/10 for x in range(0, upper_limit, int_tick_spacing)]
@@ -206,12 +256,16 @@ def calc_tick_marks(graph_height, graph_scale):
     return tick_marks
 
 def plot_graphs(collection_o_graphable_thingies):
+    """Oooh, too many issues to list here...
+    Needs making into a routine where it's given the location of it's TLC, width and height.
+    It should handle clearing the axes (of which an X one still needs adding) and the plot area.
+    Right now it still accesses a load of global variables, smells like a farmyard and looks like my bedroom."""
     # TODO: GRAPH_HEIGHT is still global and accuracy is hardwired here...
     # TODO: The concept of TLC (top left corner) is required here to offset where the graph is plotted.
     graph_height = GRAPH_HEIGHT
     scale_to_within = 0.2
     TopLCorner = (0, y_offset)
-    plot_window = (TopLCorner[0] + x_offset, TopLCorner[1])
+    plot_window = (TopLCorner[0] + x_offset, TopLCorner[1], WIDTH - y_offset, graph_height)
     # End of TODO block - hopefully
     max_values = []
     min_values = []
@@ -222,12 +276,17 @@ def plot_graphs(collection_o_graphable_thingies):
         # max_values.append(graphable_thingy.get_max())
         # min_values.append(graphable_thingy.get_min())
         min_values.append(min(graphable_thingy))
-    max_t = max(max_values)
-    min_t = min(min_values)
-    graph_scale, baseline = calc_graph_scale(graph_height, max_t, min_t, accuracy=scale_to_within)
-    # print(f"MIN temp = {min_t},  MAX temp = {max_t}, graph_scale = {graph_scale}")
+    max_value = max(max_values)
+    min_value = min(min_values)
+    graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
+    # print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
     tick_marks = calc_tick_marks(graph_height, graph_scale)
+    # clear the plotting rectangle here...
+    # draws a white background for the text
+    display.set_pen(BLACK)
+    display.rectangle(plot_window[0], plot_window[1], plot_window[2], plot_window[3])
     for tick in tick_marks:
+        # Does the '16' below correspond or relate to the 36 changed earlier ? is it something to do with text height ?
         tick_line = round(graph_height + TopLCorner[1] - (tick * graph_scale) - 16)
         tick_val = baseline + tick
         # print(f"going to put {tick_val} @ {tick_line}")
@@ -240,10 +299,13 @@ def plot_graphs(collection_o_graphable_thingies):
         # plot_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
 
 def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
+    """Clears a rectangle to the background pen, and then writes some text, offset by margins in said
+    rectangle. Curently used to write the temperature, graph title and time in 3 seperate rectangles
+    along the top of the screen (amongst other uses)"""
     display.set_font("bitmap8")
     l_margin = 8
     t_margin = 3
-    # draws a white background for the text
+    # draws a coloured background for the text
     display.set_pen(background)
     display.rectangle(TopLeft[0], TopLeft[1], width, height)
     # writes the reading as text in the white rectangle
@@ -270,6 +332,7 @@ try:
     display.update()
     top_left[1] += 20
     ssid = wifi_select(wlan, known_networks)
+    # ssid = "Rhaggy ?"
     time.sleep(1)
     print(f"Joining Network {ssid}.")
     write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
@@ -322,44 +385,51 @@ time.sleep(10)
 
 graph_points = int(GRAPH_WIDTH // bar_width)
 graph_ranges = {
-    "24 hours" : {"plot interval" : 720,
-                  "marker scale" : "hours",
-                  "markers" : [0, 6, 12, 18],
-                  "keys" : ["internal temperature", "pressure", "rel_humidity", "external temperature"],
-                  "log" : None,
-                  },
+    # "24 hours" : {"plot interval" : 720,
+    #               "marker scale" : "hours",
+    #               "markers" : [0, 6, 12, 18],
+    #               "keys" : ["cpu temperature", "pressure", "rel_humidity", "bme temperature"],
+    #               "log" : None,
+    #               },
     # "A week" : {},
     # "8 hours" : {},
-    "Last hour" : {"plot interval" : 30,
-                  "marker scale" : "mins",
-                  "markers" : [0, 15, 30, 45],
-                  "keys" : ["temperature", "pressure", "rel_humidity"],
-                  "log" : None,
-                  },
+    # "Last hour" : {"plot interval" : 30,
+    #               "marker scale" : "mins",
+    #               "markers" : [0, 15, 30, 45],
+    #               "keys" : ["temperature", "pressure", "rel_humidity"],
+    #               "log" : None,
+    #               },
     "12 hours" : {"plot interval" : 360,
                   "marker scale" : "hours",
                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
-                  "keys" : ["temperature", "pressure", "rel_humidity"],
+                  "keys" : ["mug", "cup", "air"],
                   "log" : None,
                   },
-}
+    "Ram Usage" : {"plot interval" : 120,
+                  "marker scale" : "mins",
+                  "markers" : [0, 15, 30, 45],
+                  "keys" : ["PreCollect", "PostCollect"],
+                  "log" : None,
+                  },
+    }
 
 for graph_type in graph_ranges.keys():
     name = f"{graph_type.replace(" ", "_")}.txt"
     # data_len = graph_ranges[graph_type]["plt_interval"] * graph_points
     log_keys = ["timestamp"]
     log_keys.extend(graph_ranges[graph_type]["keys"])
+    free()
     new_log = Log_File(name, graph_points, 5, log_keys)
     graph_ranges[graph_type]["log"] = new_log
 
-current_ext_temp = get_ext_temp()
+current_bme_temp = get_bme_temp()
 readout_update = 1000 # m seconds
 
 update_count = 0
 change_over = 60
 current_graph = 0
 max_graphs = len(graph_ranges)
-list_o_graphs = graph_ranges.keys()
+list_o_graphs = list(graph_ranges.keys())
 all_keys = set()
 for graph in list_o_graphs:
     for key in graph_ranges[graph]["keys"]:
@@ -368,23 +438,42 @@ for graph in list_o_graphs:
     graph_ranges[graph]["readings_count"] = 0
     graph_ranges[graph]["last reading"] = time.ticks_ms()
 
+graph_updates = [True for x in range(len(list_o_graphs))]
+# Fills the screen with black
+display.set_pen(BLACK)
+display.clear()
+
 while True:
     tm_at_start = time.ticks_ms()
     # fills the screen with black
-    display.set_pen(BLACK)
-    display.clear()
+    # display.set_pen(BLACK)
+    # display.clear()
 
     current_data = {}
     # Take Sensor readings
-    current_ext_temp = get_ext_temp()
-    current_int_temp = get_int_temp()
+    current_bme_temp = get_bme_temp()
+    current_cpu_temp = get_cpu_temp()
 
+    remote_temperatures = get_remote_temps(thermometers)
+
+    pre_free_mem = gc.mem_free()
+    pre_alloc_mem = gc.mem_alloc()
+    total_mem = pre_free_mem + pre_alloc_mem
+    # gc.collect()
+    free()
+    post_free_mem = gc.mem_free()
 
     for key in all_keys:
-        if key == "internal temperature":
-            current_data[key] = current_int_temp
-        elif key == "external temperature" or key == "temperature":
-            current_data[key] = current_ext_temp
+        if key == "cpu temperature":
+            current_data[key] = current_cpu_temp
+        elif key == "bme temperature" or key == "temperature":
+            current_data[key] = current_bme_temp
+        elif (key == "mug" or key == "cup" or key == "air"):
+            current_data[key] = remote_temperatures[thermometer_names[key]]
+        elif (key == "PreCollect"):
+            current_data[key] = 100 - pre_free_mem / total_mem * 100
+        elif (key == "PostCollect"):
+            current_data[key] = 100 - post_free_mem / total_mem * 100
         else:
             current_data[key] = None
 
@@ -401,7 +490,8 @@ while True:
         if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
             clock = time.localtime()
             # text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            # print(f"Adding a new record to {graph} @ {text}")
+            print(f"Adding a new record to {graph} @ {text}")
+            # free()
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
             new_record = {}
             new_record["timestamp"] = text
@@ -411,31 +501,45 @@ while True:
             graph_ranges[graph]["log"].add_record(new_record)
             graph_ranges[graph]["last reading"] = time.ticks_ms()
             graph_ranges[graph]["readings_count"] = 0
-        if count == current_graph:
+            graph_updates[count] = True
+        if count == current_graph and graph_updates[count]:
             title = graph
             if graph == "24 hours":
-                plot_graphs([graph_ranges[graph]["log"].get_data("external temperature"), graph_ranges[graph]["log"].get_data("internal temperature")])
+                plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cpu temperature")])
+            elif graph == "12 hours":
+                plot_graphs([graph_ranges[graph]["log"].get_data("mug"), graph_ranges[graph]["log"].get_data("cup"), graph_ranges[graph]["log"].get_data("air")])
+            elif graph == "Ram Usage":
+                plot_graphs([graph_ranges[graph]["log"].get_data("PreCollect"), graph_ranges[graph]["log"].get_data("PostCollect")])
             else:
                 plot_graphs([graph_ranges[graph]["log"].get_data("temperature")])
+            graph_updates[count] = False
+            write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
+    # print(f"{graph_updates}")
+
     update_count += 1
     if update_count >= change_over:
         current_graph += 1
         current_graph = current_graph % max_graphs
         update_count = 0
+        # print(f"Changing graph to display \"{list_o_graphs[current_graph]}\"")
+        # fills the screen with black
+        display.set_pen(BLACK)
+        display.clear()
+        graph_updates[current_graph] = True
+
 
     # heck lets also set the LED to match
     # But cut the brightness to about 5%
-    led_colour = [round(val * 0.05) for val in temperature_to_color(current_ext_temp)]
+    led_colour = [round(val * 0.05) for val in temperature_to_color(current_bme_temp)]
     led.set_rgb(*led_colour)
 
-    text = "{:.2f}".format(current_ext_temp) + "c"
+    text = "{:.2f}".format(current_bme_temp) + "c"
     write_text_in_a_box(text, (0, 0), 100, 26, WHITE, BLACK)
 
     clock = time.localtime()
     text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
     write_text_in_a_box(text, (200, 0), 120, 26, BLUE, BLACK)
 
-    write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
 
     # time to update the display
     display.update()

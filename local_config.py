@@ -15,8 +15,9 @@ hardware = {
 
 # matching 1 wire sensor unique IDs to human sensible values
 one_wire_sensor = {
-    "thermometer" : {
-            # "0123456789"  :  "Living Room",
-            # "1234567890"  :  "Bed Room",
-    }
+    "thermometer_names" : {
+     "mug" : "28b9fefa050000d4",
+     "cup" : "28e81dfb050000d6",
+     "air" : "28828beb050000c9",
+    },
 }
