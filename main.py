@@ -377,12 +377,12 @@ time.sleep(10)
 
 graph_points = int(GRAPH_WIDTH // bar_width)
 graph_ranges = {
-    "24 hours" : {"plot interval" : 720,
-                  "marker scale" : "hours",
-                  "markers" : [0, 6, 12, 18],
-                  "keys" : ["cpu temperature", "pressure", "rel_humidity", "bme temperature"],
-                  "log" : None,
-                  },
+    # "24 hours" : {"plot interval" : 720,
+    #               "marker scale" : "hours",
+    #               "markers" : [0, 6, 12, 18],
+    #               "keys" : ["cpu temperature", "pressure", "rel_humidity", "bme temperature"],
+    #               "log" : None,
+    #               },
     # "A week" : {},
     # "8 hours" : {},
     # "Last hour" : {"plot interval" : 30,
@@ -394,7 +394,7 @@ graph_ranges = {
     "12 hours" : {"plot interval" : 360,
                   "marker scale" : "hours",
                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
-                  "keys" : ["temperature", "pressure", "rel_humidity", "mug", "cup", "air"],
+                  "keys" : ["mug", "cup", "air"],
                   "log" : None,
                   },
     "Ram Usage" : {"plot interval" : 120,
