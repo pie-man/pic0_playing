@@ -8,10 +8,10 @@ from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from breakout_bme280 import BreakoutBME280
-# from join_network import wifi_activate, wifi_select, wifi_login
+from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
 from local_config import hardware
-# from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
+from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 from logging_to_disc import Log_File
 import onewire, ds18x20, binascii
 
@@ -66,9 +66,6 @@ thermometer_names = {
      "cup" : "28e81dfb050000d6",
      "air" : "28828beb050000c9",
 }
-
-# TEMP_MIN = 10
-# TEMP_MAX = 34
 bar_width = 2
 
 cpu_temperatures = []
@@ -91,14 +88,14 @@ temp_limits = [
 # temp_limits = sorted(temp_limits, key=temp_limits[0])
 
 def free(full=False):
-    F = gc.mem_free()
-    A = gc.mem_alloc()
-    T = F + A
+    # F = gc.mem_free()
+    # A = gc.mem_alloc()
+    # T = F + A
     # print(f"Pre  Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
     gc.collect()
-    F = gc.mem_free()
-    A = gc.mem_alloc()
-    T = F + A
+    # F = gc.mem_free()
+    # A = gc.mem_alloc()
+    # T = F + A
     # print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
 
 def get_bme_temp():
@@ -132,11 +129,6 @@ def get_remote_temps(ds18b20_thermometers):
         # print(f"Read {thermometer_id} got a reading of {temperature}")
         temperatures[thermometer_id] = temperature
     return temperatures
-
-# def scale_temp(temp, temp_min, temp_max):
-#     scale = HEIGHT / (temp_max - temp_min)
-#     scaled_temp = (temp - temp_min) * scale
-#     return scaled_temp
 
 def temperature_to_color(temp):
     upper_reg = temp_limits[-1][0]
@@ -178,6 +170,9 @@ def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
         prev_t = t
 
 class data_buffer(object):
+    """Originally conceived as a FIFO list to limit the size of gathered data
+    Suspect this is now redundent(ish) as something similar is now done in 
+    logging to disc module and no instances of this class are created."""
     def __init__(self, max_len=10, default_value=0.0, prefill=False):
         self.max_len = max_len
         self.default_value = default_value
@@ -208,6 +203,9 @@ class data_buffer(object):
         return self.data
 
 def calc_rectangle_coords(temp, prev_temp, graph_height, baseline, scale=10):
+    """Rather clever, if I do say so myself, but ultimately completely redundant
+    routine to create a floating rectangle to join the current reading to the previous vertically.
+    Display pack has a 'draw a line from A to B which would have been much better to use..."""
     upper_temp = max(temp, prev_temp) - baseline
     difference = abs(temp - prev_temp)
     top = graph_height - round(upper_temp * scale) - 2
@@ -215,6 +213,7 @@ def calc_rectangle_coords(temp, prev_temp, graph_height, baseline, scale=10):
     return top, rect_height
 
 def calc_rectangle_colour(temp, prev_temp):
+    """Picks the appropriate 'colour' from the midpoint of two values (temperatures)"""
     mid_temp = min(temp, prev_temp) + abs(temp - prev_temp) / 2.0
     colour_temp = temperature_to_color(mid_temp)
     return colour_temp
@@ -239,6 +238,9 @@ def calc_graph_scale(graph_height, max_value, min_value, accuracy=1.0):
     return scale, baseline
 
 def calc_tick_marks(graph_height, graph_scale):
+    """This appears to work, for most cases - but needs thought...
+    It also needs to clear it's background before drawing as if the graph is updated between 'changes' of plot type
+    the the new scale draws over the top of the old one and looks really weird."""
     value_range = graph_height / graph_scale
     # print(f"I think the temp range is {value_range}")
     max_tick_marks = graph_height // 30 # Where tF does (the original value of) 36 come from ? could it be twice text height plus a small margin ?
@@ -254,6 +256,10 @@ def calc_tick_marks(graph_height, graph_scale):
     return tick_marks
 
 def plot_graphs(collection_o_graphable_thingies):
+    """Oooh, too many issues to list here...
+    Needs making into a routine where it's given the location of it's TLC, width and height.
+    It should handle clearing the axes (of which an X one still needs adding) and the plot area.
+    Right now it still accesses a load of global variables, smells like a farmyard and looks like my bedroom."""
     # TODO: GRAPH_HEIGHT is still global and accuracy is hardwired here...
     # TODO: The concept of TLC (top left corner) is required here to offset where the graph is plotted.
     graph_height = GRAPH_HEIGHT
@@ -293,10 +299,13 @@ def plot_graphs(collection_o_graphable_thingies):
         # plot_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
 
 def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
+    """Clears a rectangle to the background pen, and then writes some text, offset by margins in said
+    rectangle. Curently used to write the temperature, graph title and time in 3 seperate rectangles
+    along the top of the screen (amongst other uses)"""
     display.set_font("bitmap8")
     l_margin = 8
     t_margin = 3
-    # draws a white background for the text
+    # draws a coloured background for the text
     display.set_pen(background)
     display.rectangle(TopLeft[0], TopLeft[1], width, height)
     # writes the reading as text in the white rectangle
@@ -310,7 +319,7 @@ try:
     write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
     display.update()
     top_left[1] += 30
-    # wlan = wifi_activate()
+    wlan = wifi_activate()
     time.sleep(1)
     print("Getting list of known networks")
     write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
@@ -322,40 +331,39 @@ try:
     write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
     top_left[1] += 20
-    # ssid = wifi_select(wlan, known_networks)
-    ssid = "Rhaggy ?"
+    ssid = wifi_select(wlan, known_networks)
+    # ssid = "Rhaggy ?"
     time.sleep(1)
     print(f"Joining Network {ssid}.")
     write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
     top_left[1] += 20
-    # wifi_login(ssid, known_networks[ssid], wlan)
+    wifi_login(ssid, known_networks[ssid], wlan)
     time.sleep(1)
     print("Setting time.")
     write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
     display.update()
     top_left[1] += 30
-    # time_val = set_time()
+    time_val = set_time()
     write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
     top_left[1] += 30
-    # write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+    write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
     top_left[1] += 20
-    # write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+    write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
     display.update()
     print("here's that line")
     time.sleep(10)
     top_left[1] = 10
-    # if is_it_daylight_saving_time(time_val):
-    #     time_val += 3600
-    #     print("I think it's time to save daylight")
-    #     write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
-    # else:
-    #     write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
+    if is_it_daylight_saving_time(time_val):
+        time_val += 3600
+        print("I think it's time to save daylight")
+        write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
+    else:
+        write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
     print("Here's that other line")
     time.sleep(5)
-    # tm = time.gmtime(time_val)
-    # machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
-    machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
+    tm = time.gmtime(time_val)
+    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
     time.sleep(1)
 except: # Need better exception handling here, but then network stuff needs that too.
     machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
