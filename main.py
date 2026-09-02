@@ -94,12 +94,12 @@ def free(full=False):
     F = gc.mem_free()
     A = gc.mem_alloc()
     T = F + A
-    print(f"Pre  Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+    # print(f"Pre  Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
     gc.collect()
     F = gc.mem_free()
     A = gc.mem_alloc()
     T = F + A
-    print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+    # print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
 
 def get_bme_temp():
     if got_bme69x:
@@ -232,20 +232,20 @@ def calc_graph_scale(graph_height, max_value, min_value, accuracy=1.0):
     order = 100 / difference
     scale = (graph_height / difference) * order * 10 + 1
     scale = scale // order / 10
-    print(f"min_value = {min_value}, baseline = {baseline}, "
-          f"max_value = {max_value}, topline = {topline}, "
-          f"raw scale = {graph_height / abs(topline - baseline)}")
-    print(f"with graph_height {graph_height} and scale {scale}, max temp would be {baseline + (graph_height / scale)}")
+    # print(f"min_value = {min_value}, baseline = {baseline}, "
+    #       f"max_value = {max_value}, topline = {topline}, "
+    #       f"raw scale = {graph_height / abs(topline - baseline)}")
+    # print(f"with graph_height {graph_height} and scale {scale}, max temp would be {baseline + (graph_height / scale)}")
     return scale, baseline
 
 def calc_tick_marks(graph_height, graph_scale):
     value_range = graph_height / graph_scale
-    print(f"I think the temp range is {value_range}")
+    # print(f"I think the temp range is {value_range}")
     max_tick_marks = graph_height // 30 # Where tF does (the original value of) 36 come from ? could it be twice text height plus a small margin ?
-    print(f"I think I can squeeze in {max_tick_marks} ticks")
+    # print(f"I think I can squeeze in {max_tick_marks} ticks")
     tick_spacing = max(0.1, value_range / max_tick_marks) # '0.1' ?  posibly 1dp, but WTaF
     tick_spacing = value_range / max_tick_marks # try again, without the 'max' test...
-    print(f"tick marks every {tick_spacing} units")
+    # print(f"tick marks every {tick_spacing} units")
     upper_limit = int(value_range *10)
     int_tick_spacing = int(tick_spacing * 10)
     # print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
@@ -259,7 +259,7 @@ def plot_graphs(collection_o_graphable_thingies):
     graph_height = GRAPH_HEIGHT
     scale_to_within = 0.2
     TopLCorner = (0, y_offset)
-    plot_window = (TopLCorner[0] + x_offset, TopLCorner[1])
+    plot_window = (TopLCorner[0] + x_offset, TopLCorner[1], WIDTH - y_offset, graph_height)
     # End of TODO block - hopefully
     max_values = []
     min_values = []
@@ -273,8 +273,12 @@ def plot_graphs(collection_o_graphable_thingies):
     max_value = max(max_values)
     min_value = min(min_values)
     graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
-    print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
+    # print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
     tick_marks = calc_tick_marks(graph_height, graph_scale)
+    # clear the plotting rectangle here...
+    # draws a white background for the text
+    display.set_pen(BLACK)
+    display.rectangle(plot_window[0], plot_window[1], plot_window[2], plot_window[3])
     for tick in tick_marks:
         # Does the '16' below correspond or relate to the 36 changed earlier ? is it something to do with text height ?
         tick_line = round(graph_height + TopLCorner[1] - (tick * graph_scale) - 16)
@@ -426,11 +430,16 @@ for graph in list_o_graphs:
     graph_ranges[graph]["readings_count"] = 0
     graph_ranges[graph]["last reading"] = time.ticks_ms()
 
+graph_updates = [True for x in range(len(list_o_graphs))]
+# Fills the screen with black
+display.set_pen(BLACK)
+display.clear()
+
 while True:
     tm_at_start = time.ticks_ms()
     # fills the screen with black
-    display.set_pen(BLACK)
-    display.clear()
+    # display.set_pen(BLACK)
+    # display.clear()
 
     current_data = {}
     # Take Sensor readings
@@ -484,7 +493,8 @@ while True:
             graph_ranges[graph]["log"].add_record(new_record)
             graph_ranges[graph]["last reading"] = time.ticks_ms()
             graph_ranges[graph]["readings_count"] = 0
-        if count == current_graph:
+            graph_updates[count] = True
+        if count == current_graph and graph_updates[count]:
             title = graph
             if graph == "24 hours":
                 plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cpu temperature")])
@@ -494,12 +504,21 @@ while True:
                 plot_graphs([graph_ranges[graph]["log"].get_data("PreCollect"), graph_ranges[graph]["log"].get_data("PostCollect")])
             else:
                 plot_graphs([graph_ranges[graph]["log"].get_data("temperature")])
+            graph_updates[count] = False
+            write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
+    # print(f"{graph_updates}")
+
     update_count += 1
     if update_count >= change_over:
         current_graph += 1
         current_graph = current_graph % max_graphs
         update_count = 0
-        print(f"Changing graph to display \"{list_o_graphs[current_graph]}\"")
+        # print(f"Changing graph to display \"{list_o_graphs[current_graph]}\"")
+        # fills the screen with black
+        display.set_pen(BLACK)
+        display.clear()
+        graph_updates[current_graph] = True
+
 
     # heck lets also set the LED to match
     # But cut the brightness to about 5%
@@ -513,7 +532,6 @@ while True:
     text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
     write_text_in_a_box(text, (200, 0), 120, 26, BLUE, BLACK)
 
-    write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
 
     # time to update the display
     display.update()
