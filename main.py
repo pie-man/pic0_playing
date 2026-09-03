@@ -62,9 +62,9 @@ except(RuntimeError): # same again
     got_ds18t20 = False
     thermometers = []
 thermometer_names = {
-     "mug" : "28b9fefa050000d4",
-     "cup" : "28e81dfb050000d6",
-     "air" : "28828beb050000c9",
+     "mug" : "2865b3e9050000d8",
+     "cup" : "287a10ea05000052",
+     "air" : "28d9aa2c06000071",
 }
 bar_width = 2
 
@@ -108,6 +108,9 @@ def get_bme_temp():
         temperature = readings[0]
     else:
         temperature = get_cpu_temp() - 1.75
+        # just briefly, overriding this to use "air" temp from the ds18b20s (without passing in the required variables...)
+        temps = get_remote_temps(thermometers)
+        temperature = temps[thermometer_names["air"]]
     return temperature
 
 def get_cpu_temp():
@@ -385,20 +388,20 @@ time.sleep(10)
 
 graph_points = int(GRAPH_WIDTH // bar_width)
 graph_ranges = {
-    # "24 hours" : {"plot interval" : 720,
-    #               "marker scale" : "hours",
-    #               "markers" : [0, 6, 12, 18],
-    #               "keys" : ["cpu temperature", "pressure", "rel_humidity", "bme temperature"],
-    #               "log" : None,
-    #               },
+    "24 hours" : {"plot interval" : 720,
+                  "marker scale" : "hours",
+                  "markers" : [0, 6, 12, 18],
+                  "keys" : ["cpu temperature", "pressure", "rel_humidity", "bme temperature"],
+                  "log" : None,
+                  },
     # "A week" : {},
     # "8 hours" : {},
-    # "Last hour" : {"plot interval" : 30,
-    #               "marker scale" : "mins",
-    #               "markers" : [0, 15, 30, 45],
-    #               "keys" : ["temperature", "pressure", "rel_humidity"],
-    #               "log" : None,
-    #               },
+    "Last hour" : {"plot interval" : 30,
+                  "marker scale" : "mins",
+                  "markers" : [0, 15, 30, 45],
+                  "keys" : ["temperature", "pressure", "rel_humidity"],
+                  "log" : None,
+                  },
     "12 hours" : {"plot interval" : 360,
                   "marker scale" : "hours",
                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
@@ -489,10 +492,8 @@ while True:
             graph_ranges[graph]["readings_count"] += 1
         if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
             clock = time.localtime()
-            # text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            print(f"Adding a new record to {graph} @ {text}")
-            # free()
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+            print(f"Adding a new record to {graph} @ {text}")
             new_record = {}
             new_record["timestamp"] = text
             for key in graph_ranges[graph]["keys"]:
