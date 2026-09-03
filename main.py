@@ -65,6 +65,7 @@ thermometer_names = {
      "mug" : "2865b3e9050000d8",
      "cup" : "287a10ea05000052",
      "air" : "28d9aa2c06000071",
+     "default" : "28d9aa2c06000071", # This one ("default") is used as a backup if no bme sensor is present.
 }
 bar_width = 2
 
@@ -98,29 +99,74 @@ def free(full=False):
     # T = F + A
     # print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
 
-def get_bme_temp():
+def get_bme_readings():
+    """Reads from either a bme69x or bme280 breakout.
+    Returns a standised dictionary which the various
+    get_bme_<reading type> routines will return as individual values - seemed like a good idea at the time."""
+    bme_readings = {}
+    bme_readings["gas_resistance"] = None
+    bme_readings["status"] = None
+    bme_readings["gas_index"] = None
+    bme_readings["meas_index"] = None
     if got_bme69x:
         readings = bme69x.read()
-        temperature = readings[0]
+        bme_readings["gas_resistance"] = readings[3]
+        bme_readings["status"] = readings[4]
+        bme_readings["gas_index"] = readings[5]
+        bme_readings["meas_index"] = readings[6]
     elif got_bme280:
         readings = bme280.read()
-        # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
-        temperature = readings[0]
     else:
-        temperature = get_cpu_temp() - 1.75
-        # just briefly, overriding this to use "air" temp from the ds18b20s (without passing in the required variables...)
-        temps = get_remote_temps(thermometers)
-        temperature = temps[thermometer_names["air"]]
-    return temperature
+        raise(ValueError("No BME board found to read from"))
+    # The folling readins are common to both BME sensors currently catered for.
+    bme_readings["temperature"] = readings[0]
+    bme_readings["pressure"] = readings[1]
+    bme_readings["humidity"] = readings[2]
+    return bme_readings
+
+def get_bme_temp(readings: dict={}) -> float:
+    """takes readings from either a bme69x or bme280 breakout.
+    The intention was to allow the breakout to be read once and essentially provide
+    standardised functions for the different readings.
+    If no set of readings is provided, calls the get_bme_readings routine for the user.
+    This one returns temperature....."""
+    if not readings:
+        readings = get_bme_readings()
+    return readings["temperature"]
+
+def get_bme_pressure(readings: dict={}) -> float:
+    """takes readings from either a bme69x or bme280 breakout.
+    The intention was to allow the breakout to be read once and essentially provide
+    standardised functions for the different readings.
+    If no set of readings is provided, calls the get_bme_readings routine for the user.
+    This one returns pressure....."""
+    if not readings:
+        readings = get_bme_readings()
+    return readings["pressure"]
+
+def get_bme_humiditiy(readings: dict={}) -> float:
+    """takes readings from either a bme69x or bme280 breakout.
+    The intention was to allow the breakout to be read once and essentially provide
+    standardised functions for the different readings.
+    If no set of readings is provided, calls the get_bme_readings routine for the user.
+    This one returns humidity....."""
+    if not readings:
+        readings = get_bme_readings()
+    return readings["humidity"]
 
 def get_cpu_temp():
+    """Can't recall which demo this bit of code came from, nor what the various numbers do/represent."""
     reading = sensor_temp.read_u16() * conversion_factor
     temperature = 27 - (reading - 0.706) / 0.001721
     return temperature
 
 def get_remote_temps(ds18b20_thermometers):
+    """Requires a list of ds18b20 one-wire thermometers which were returned by
+    'ds18x20.DS18X20(onewire.OneWire(ds_pin)).scan()' earlier in the setup.
+    Converts each thermometer ID into ascii as a human readable / code accessible value.
+    Assembles a dictionary using those IDs as keys and the temperatures recorded as the values"""
     ds_sensor.convert_temp()
-    time.sleep_ms(750)
+    time.sleep_ms(750) # Not sure why this is here, nor what it's value needs to be, but it came from the demo code and I sometimes got weird values, like "85" when I reduced it.
     temperatures = {}
     for thermometer in ds18b20_thermometers:
         thermometer_id_hex = binascii.hexlify(thermometer)
@@ -248,12 +294,20 @@ def calc_tick_marks(graph_height, graph_scale):
     # print(f"I think the temp range is {value_range}")
     max_tick_marks = graph_height // 30 # Where tF does (the original value of) 36 come from ? could it be twice text height plus a small margin ?
     # print(f"I think I can squeeze in {max_tick_marks} ticks")
-    tick_spacing = max(0.1, value_range / max_tick_marks) # '0.1' ?  posibly 1dp, but WTaF
-    tick_spacing = value_range / max_tick_marks # try again, without the 'max' test...
+    tick_spacing = 0
+    while int(tick_spacing * 10) <= 0:
+        tick_spacing = value_range / max_tick_marks
+        max_tick_marks -= 1
     # print(f"tick marks every {tick_spacing} units")
     upper_limit = int(value_range *10)
     int_tick_spacing = int(tick_spacing * 10)
-    # print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
+    if upper_limit < 0 or upper_limit <= int_tick_spacing or int_tick_spacing <= 0:
+        print(f"Call Batman - trying to generate a range from 0 to {upper_limit} with an interval of {int_tick_spacing}")
+        if int_tick_spacing <= 0:
+            int_tick_spacing = 1
+        if upper_limit < (int_tick_spacing * 2):
+            upper_limit = int_tick_spacing * 2.0
+        print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
     tick_marks = [x/10 for x in range(0, upper_limit, int_tick_spacing)]
     # print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
@@ -425,7 +479,6 @@ for graph_type in graph_ranges.keys():
     new_log = Log_File(name, graph_points, 5, log_keys)
     graph_ranges[graph_type]["log"] = new_log
 
-current_bme_temp = get_bme_temp()
 readout_update = 1000 # m seconds
 
 update_count = 0
@@ -454,10 +507,26 @@ while True:
 
     current_data = {}
     # Take Sensor readings
-    current_bme_temp = get_bme_temp()
+    if got_ds18t20:
+        remote_temperatures = get_remote_temps(thermometers)
+
     current_cpu_temp = get_cpu_temp()
 
-    remote_temperatures = get_remote_temps(thermometers)
+    current_bme_pressure = None
+    current_bme_humidity = None
+    if got_bme69x or got_bme280:
+        bme_readings = get_bme_readings()
+        current_bme_temp = get_bme_temp(bme_readings)
+        current_bme_pressure = get_bme_pressure(bme_readings)
+        current_bme_humidity = get_bme_humiditiy(bme_readings)
+    elif got_ds18t20:
+        current_bme_temp = remote_temperatures[thermometer_names["default"]]
+    else:
+        current_bme_temp = current_cpu_temp
+
+    clock = time.localtime()
+    reading_time = time.ticks_ms()
+    timestamp = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
 
     pre_free_mem = gc.mem_free()
     pre_alloc_mem = gc.mem_alloc()
@@ -466,11 +535,15 @@ while True:
     free()
     post_free_mem = gc.mem_free()
 
-    for key in all_keys:
+    for key in all_keys: # There has to be a better way to do this....
         if key == "cpu temperature":
             current_data[key] = current_cpu_temp
         elif key == "bme temperature" or key == "temperature":
             current_data[key] = current_bme_temp
+        elif (key == "pressure"):
+            current_data[key] = current_bme_pressure
+        elif (key == "rel_humidity"):
+            current_data[key] = current_bme_humidity
         elif (key == "mug" or key == "cup" or key == "air"):
             current_data[key] = remote_temperatures[thermometer_names[key]]
         elif (key == "PreCollect"):
@@ -490,17 +563,15 @@ while True:
                 changed = True
         if changed:
             graph_ranges[graph]["readings_count"] += 1
-        if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
-            clock = time.localtime()
-            text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            print(f"Adding a new record to {graph} @ {text}")
+        if time.ticks_diff(reading_time, graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
+            print(f"Adding a new record to {graph} @ {timestamp}")
             new_record = {}
-            new_record["timestamp"] = text
+            new_record["timestamp"] = timestamp
             for key in graph_ranges[graph]["keys"]:
                 new_record[key] = graph_ranges[graph][f"{key}_total"] / graph_ranges[graph]["readings_count"]
                 graph_ranges[graph][f"{key}_total"] = 0
             graph_ranges[graph]["log"].add_record(new_record)
-            graph_ranges[graph]["last reading"] = time.ticks_ms()
+            graph_ranges[graph]["last reading"] = reading_time
             graph_ranges[graph]["readings_count"] = 0
             graph_updates[count] = True
         if count == current_graph and graph_updates[count]:
@@ -522,7 +593,7 @@ while True:
         current_graph += 1
         current_graph = current_graph % max_graphs
         update_count = 0
-        # print(f"Changing graph to display \"{list_o_graphs[current_graph]}\"")
+        print(f"Changing graph to display \"{list_o_graphs[current_graph]}\"")
         # fills the screen with black
         display.set_pen(BLACK)
         display.clear()
