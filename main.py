@@ -239,11 +239,9 @@ def calc_tick_marks(graph_height, graph_scale):
     # print(f"I think the temp range is {value_range}")
     max_tick_marks = graph_height // 30 # Where tF does (the original value of) 36 come from ? could it be twice text height plus a small margin ?
     # print(f"I think I can squeeze in {max_tick_marks} ticks")
-    tick_spacing = max(0.1, value_range / max_tick_marks) # '0.1' ?  posibly 1dp, but WTaF
-    tick_spacing = value_range / max_tick_marks # try again, without the 'max' test...
-    # print(f"tick marks every {tick_spacing} units")
+    tick_spacing = value_range / max_tick_marks
     upper_limit = int(value_range *10)
-    int_tick_spacing = int(tick_spacing * 10)
+    int_tick_spacing = max(1, int(tick_spacing * 10))  # ended up moiving the max here - it IS needed.
     # print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
     tick_marks = [x/10 for x in range(0, upper_limit, int_tick_spacing)]
     # print(f"gives a set of tick marks : {tick_marks}")
