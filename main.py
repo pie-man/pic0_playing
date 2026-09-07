@@ -8,12 +8,11 @@ from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from breakout_bme280 import BreakoutBME280
-from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
 from local_config import hardware
-from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 from logging_to_disc import Log_File
 import onewire, ds18x20, binascii
+from four_buttons import manual_set_time
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -87,16 +86,8 @@ temp_limits = [
 ]
 # temp_limits = sorted(temp_limits, key=temp_limits[0])
 
-def free(full=False):
-    # F = gc.mem_free()
-    # A = gc.mem_alloc()
-    # T = F + A
-    # print(f"Pre  Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+def free():
     gc.collect()
-    # F = gc.mem_free()
-    # A = gc.mem_alloc()
-    # T = F + A
-    # print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
 
 def get_bme_temp():
     if got_bme69x:
@@ -316,64 +307,70 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
 
 # set the time..
-try:
-    print("Activating WiFi :")
+if hardware["WiFi"]:
+    try:
+        from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
+        from join_network import wifi_activate, wifi_select, wifi_login
+        print("Activating WiFi :")
+        top_left = [10, 10]
+        write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
+        display.update()
+        top_left[1] += 30
+        wlan = wifi_activate()
+        time.sleep(1)
+        print("Getting list of known networks")
+        write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        top_left[1] += 20
+        known_networks = wifi_creds2()
+        time.sleep(1)
+        print("Selecting and joining...")
+        write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        top_left[1] += 20
+        ssid = wifi_select(wlan, known_networks)
+        time.sleep(1)
+        print(f"Joining Network {ssid}.")
+        write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        top_left[1] += 20
+        wifi_login(ssid, known_networks[ssid], wlan)
+        time.sleep(1)
+        print("Setting time.")
+        write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
+        display.update()
+        top_left[1] += 30
+        time_val = set_time()
+        write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
+        top_left[1] += 30
+        write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+        top_left[1] += 20
+        write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        print("here's that line")
+        time.sleep(10)
+        top_left[1] = 10
+        if is_it_daylight_saving_time(time_val):
+            time_val += 3600
+            print("I think it's time to save daylight")
+            write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
+        else:
+            write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
+        print("Here's that other line")
+        time.sleep(5)
+        tm = time.gmtime(time_val)
+        machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+        time.sleep(1)
+    except: # Need better exception handling here, but then network stuff needs that too.
+        machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
+        print("An error has occurred in Setup")
+        write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
+        display.update()
+        time.sleep(10)
+else:
+    manual_set_time(display)
     top_left = [10, 10]
-    write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    top_left[1] += 30
-    wlan = wifi_activate()
-    time.sleep(1)
-    print("Getting list of known networks")
-    write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    known_networks = wifi_creds2()
-    time.sleep(1)
-    print("Selecting and joining...")
-    write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    ssid = wifi_select(wlan, known_networks)
-    # ssid = "Rhaggy ?"
-    time.sleep(1)
-    print(f"Joining Network {ssid}.")
-    write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    wifi_login(ssid, known_networks[ssid], wlan)
-    time.sleep(1)
-    print("Setting time.")
-    write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    top_left[1] += 30
-    time_val = set_time()
-    write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
-    top_left[1] += 30
-    write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
-    top_left[1] += 20
-    write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    print("here's that line")
-    time.sleep(10)
-    top_left[1] = 10
-    if is_it_daylight_saving_time(time_val):
-        time_val += 3600
-        print("I think it's time to save daylight")
-        write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
-    else:
-        write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
-    print("Here's that other line")
-    time.sleep(5)
-    tm = time.gmtime(time_val)
-    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
-    time.sleep(1)
-except: # Need better exception handling here, but then network stuff needs that too.
-    machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
-    print("An error has occurred in Setup")
-    write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    time.sleep(10)
+
 clock = time.localtime()
 text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
 # print(f"{text}")

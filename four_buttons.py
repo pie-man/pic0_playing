@@ -79,8 +79,8 @@ class Menu(object):
             else:
                 self.display.text(f"{self.digits[item]:02}", 230, dateline, self.WIDTH, 4)
         self.display.set_pen(self.BLACK)
-        self.display.text(":", 140, dateline, self.WIDTH, 4)
-        self.display.text(":", 220, dateline, self.WIDTH, 4)
+        self.display.text("/", 140, dateline, self.WIDTH, 4)
+        self.display.text("/", 220, dateline, self.WIDTH, 4)
         # Display current time.
         timeline = 140
         for item in range(3,self.max_parts):
