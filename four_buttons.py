@@ -10,19 +10,17 @@ button_b = Pin(13, Pin.IN, Pin.PULL_UP)
 button_x = Pin(14, Pin.IN, Pin.PULL_UP)
 button_y = Pin(15, Pin.IN, Pin.PULL_UP)
 
-display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, pen_type=PEN_RGB565, rotate=0)
-display.set_backlight(0.8)
-
-# set up constants for drawing
-WIDTH, HEIGHT = display.get_bounds()
-BLACK = display.create_pen(0, 0, 0)
-RED = display.create_pen(255, 0, 0)
-GREEN = display.create_pen(0, 255, 0)
-BLUE = display.create_pen(0, 0, 255)
-WHITE = display.create_pen(255, 255, 255)
 
 class Menu(object):
-    def __init__(self):
+    def __init__(self, display):
+        self.display = display
+    # set up constants for drawing
+        self.WIDTH, self.HEIGHT = self.display.get_bounds()
+        self.BLACK = self.display.create_pen(0, 0, 0)
+        self.RED = self.display.create_pen(255, 0, 0)
+        self.GREEN = self.display.create_pen(0, 255, 0)
+        self.BLUE = self.display.create_pen(0, 0, 255)
+        self.WHITE = self.display.create_pen(255, 255, 255)
         self.shadow_offset = 2
         self.cursor = "^^"
         self.setting = True
@@ -35,44 +33,44 @@ class Menu(object):
     # A function to draw only the menu elements.
     # Helps to keep our main draw function tidy!
     def draw_menu(self):
-        display.set_pen(WHITE)
-        display.clear()
+        self.display.set_pen(self.WHITE)
+        self.display.clear()
 
         # Draw the screen title.
         font_scale = 3
-        display.set_pen(BLACK)
-        length = display.measure_text(self.title, font_scale)
-        display.text(self.title, WIDTH // 2 - length // 2 + self.shadow_offset, 10 + self.shadow_offset, WIDTH, font_scale)
-        display.set_pen(BLUE)
-        display.text(self.title, WIDTH // 2 - length // 2, 10, WIDTH, font_scale)
+        self.display.set_pen(self.BLACK)
+        length = self.display.measure_text(self.title, font_scale)
+        self.display.text(self.title, self.WIDTH // 2 - length // 2 + self.shadow_offset, 10 + self.shadow_offset, self.WIDTH, font_scale)
+        self.display.set_pen(self.BLUE)
+        self.display.text(self.title, self.WIDTH // 2 - length // 2, 10, self.WIDTH, font_scale)
 
         toprow_height = 55
         lowrow_height = 172
 
         # Label the buttons :
         font_scale = 3
-        display.set_pen(RED)
-        display.text("+", 8, toprow_height, WIDTH, font_scale)
-        display.set_pen(BLACK)
-        display.text("-", 8, lowrow_height, WIDTH, font_scale)
-        display.set_pen(BLUE)
+        self.display.set_pen(self.RED)
+        self.display.text("+", 8, toprow_height, self.WIDTH, font_scale)
+        self.display.set_pen(self.BLACK)
+        self.display.text("-", 8, lowrow_height, self.WIDTH, font_scale)
+        self.display.set_pen(self.BLUE)
         text = "Next"
-        display.text(text, WIDTH - 8 - display.measure_text(text, font_scale), toprow_height, WIDTH, font_scale)
-        display.set_pen(GREEN)
+        self.display.text(text, self.WIDTH - 8 - self.display.measure_text(text, font_scale), toprow_height, self.WIDTH, font_scale)
+        self.display.set_pen(self.GREEN)
         text = "Set"
-        display.text(text, WIDTH - 8 - display.measure_text(text, font_scale), lowrow_height, WIDTH, font_scale)
+        self.display.text(text, self.WIDTH - 8 - self.display.measure_text(text, font_scale), lowrow_height, self.WIDTH, font_scale)
 
         # Display current time.
         for item in range(self.max_parts):
             if item == self.current_digit:
-                display.set_pen(RED)
-                display.text(self.cursor, 115 + item*60, 130, WIDTH, 4)
+                self.display.set_pen(self.RED)
+                self.display.text(self.cursor, 115 + item*60, 130, self.WIDTH, 4)
             else:
-                display.set_pen(BLACK)
+                self.display.set_pen(self.BLACK)
 
-            display.text(f"{self.digits[item]:02}", 110 + item*60, 100, WIDTH, 4)
-        display.set_pen(BLACK)
-        display.text(":", 160, 100, WIDTH, 4)
+            self.display.text(f"{self.digits[item]:02}", 110 + item*60, 100, self.WIDTH, 4)
+        self.display.set_pen(self.BLACK)
+        self.display.text(":", 160, 100, self.WIDTH, 4)
 
     def next(self):
         self.current_digit = (self.current_digit + 1) % self.max_parts
@@ -94,8 +92,8 @@ class Menu(object):
         if button_x.value() == 0: # "Next"
             self.next()
 
-def manual_set_time():
-    menu = Menu()
+def manual_set_time(display):
+    menu = Menu(display)
 
     while menu.setting:
         menu.draw_menu()
@@ -107,7 +105,13 @@ def manual_set_time():
     RTC().datetime((2026, 1, 1, 0, menu.digits[0], menu.digits[1], 0, 0))
 
 if __name__ == "__main__":
-    manual_set_time()
+    display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, pen_type=PEN_RGB565, rotate=0)
+    display.set_backlight(0.8)
+
+
+    manual_set_time(display)
+    BLACK = display.create_pen(0, 0, 0)
+    BLUE = display.create_pen(0, 0, 255)
     while True:
         display.set_font("bitmap8")
         l_margin = 8

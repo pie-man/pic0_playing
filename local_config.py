@@ -11,6 +11,7 @@ hardware = {
     # "LED_pins" : [ 6, 7, 8 ],
     # For Display Pack 2.8":
     "LED_pins" : [ 26, 27, 28 ],
+    "WiFi" : True
 }
 
 # matching 1 wire sensor unique IDs to human sensible values
