@@ -9,6 +9,9 @@ button_a = Pin(12, Pin.IN, Pin.PULL_UP)
 button_b = Pin(13, Pin.IN, Pin.PULL_UP)
 button_x = Pin(14, Pin.IN, Pin.PULL_UP)
 button_y = Pin(15, Pin.IN, Pin.PULL_UP)
+months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 
 class Menu(object):
@@ -26,9 +29,10 @@ class Menu(object):
         self.setting = True
         self.title = "Please Set the time."
 
-        self.max_parts = 2
-        self.digits = [0] * self.max_parts
-        self.limits = [24, 60]
+        self.max_parts = 5
+        self.digits = [2026, 0, 1]
+        self.digits.extend( [0] * (self.max_parts - 3) )
+        self.limits = [50, 12, 31, 24, 60]
         self.current_digit = 0
     # A function to draw only the menu elements.
     # Helps to keep our main draw function tidy!
@@ -60,17 +64,36 @@ class Menu(object):
         text = "Set"
         self.display.text(text, self.WIDTH - 8 - self.display.measure_text(text, font_scale), lowrow_height, self.WIDTH, font_scale)
 
-        # Display current time.
-        for item in range(self.max_parts):
+        # Display current date.
+        dateline = 80
+        for item in range(3):
             if item == self.current_digit:
                 self.display.set_pen(self.RED)
-                self.display.text(self.cursor, 115 + item*60, 130, self.WIDTH, 4)
+                self.display.text(self.cursor, 100 + item*70, dateline + 30, self.WIDTH, 4)
+            else:
+                self.display.set_pen(self.BLACK)
+            if item == 0:
+                self.display.text(f"{self.digits[item]:4}", 50, dateline, self.WIDTH, 4)
+            elif item == 1:
+                self.display.text(f"{months[self.digits[1]]}", 150, dateline, self.WIDTH, 4)
+            else:
+                self.display.text(f"{self.digits[item]:02}", 230, dateline, self.WIDTH, 4)
+        self.display.set_pen(self.BLACK)
+        self.display.text(":", 140, dateline, self.WIDTH, 4)
+        self.display.text(":", 220, dateline, self.WIDTH, 4)
+        # Display current time.
+        timeline = 140
+        for item in range(3,self.max_parts):
+            location = item - 3
+            if item == self.current_digit:
+                self.display.set_pen(self.RED)
+                self.display.text(self.cursor, 115 + location*60, timeline+30, self.WIDTH, 4)
             else:
                 self.display.set_pen(self.BLACK)
 
-            self.display.text(f"{self.digits[item]:02}", 110 + item*60, 100, self.WIDTH, 4)
+            self.display.text(f"{self.digits[item]:02}", 110 + location*60, timeline, self.WIDTH, 4)
         self.display.set_pen(self.BLACK)
-        self.display.text(":", 160, 100, self.WIDTH, 4)
+        self.display.text(":", 160, timeline, self.WIDTH, 4)
 
     def next(self):
         self.current_digit = (self.current_digit + 1) % self.max_parts
@@ -80,11 +103,31 @@ class Menu(object):
 
         if button_a.value() == 0: # "+"
             self.digits[self.current_digit] += 1
-            self.digits[self.current_digit] = self.digits[self.current_digit] % self.limits[self.current_digit]
+            if self.current_digit == 0:
+                year = self.digits[0] - 2020
+                year = year % self.limits[self.current_digit]
+                self.digits[0] = year + 2020
+            elif self.current_digit == 1:
+                self.digits[self.current_digit] = self.digits[self.current_digit] % self.limits[self.current_digit]
+                self.digits[2] = 1
+            elif self.current_digit == 2:
+                self.digits[self.current_digit] = ((self.digits[self.current_digit]-1) % days_in_month[self.digits[1]] +1)
+            else:
+                self.digits[self.current_digit] = self.digits[self.current_digit] % self.limits[self.current_digit]
 
         if button_b.value() == 0: # "-"
             self.digits[self.current_digit] -= 1
-            self.digits[self.current_digit] = self.digits[self.current_digit] % self.limits[self.current_digit]
+            if self.current_digit == 0:
+                year = self.digits[0] - 2020
+                year = year % self.limits[self.current_digit]
+                self.digits[0] = year + 2020
+            elif self.current_digit == 1:
+                self.digits[self.current_digit] = self.digits[self.current_digit] % self.limits[self.current_digit]
+                self.digits[2] = 1
+            elif self.current_digit == 2:
+                self.digits[self.current_digit] = ((self.digits[self.current_digit]-1) % days_in_month[self.digits[1]] +1)
+            else:
+                self.digits[self.current_digit] = self.digits[self.current_digit] % self.limits[self.current_digit]
 
         if button_y.value() == 0: # Set
             self.setting = False
@@ -101,8 +144,8 @@ def manual_set_time(display):
         display.update()
         time.sleep(0.1)
 
-    print(f"Will set the time to {menu.digits[0]:02}:{menu.digits[1]:02}")
-    RTC().datetime((2026, 1, 1, 0, menu.digits[0], menu.digits[1], 0, 0))
+    print(f"Will set the time to {menu.digits[0]:04}/{menu.digits[1]:02}/{menu.digits[2]:02} {menu.digits[3]:02}:{menu.digits[4]:02}:00")
+    RTC().datetime((menu.digits[0], menu.digits[1] + 1, menu.digits[2], 0, menu.digits[3], menu.digits[4], 0, 0))
 
 if __name__ == "__main__":
     display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, pen_type=PEN_RGB565, rotate=0)
@@ -119,10 +162,11 @@ if __name__ == "__main__":
         # draws a white background for the text
         display.set_pen(BLACK)
         display.clear()
+        display.set_pen(BLUE)
         clock = time.localtime()
         text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-
-        display.set_pen(BLUE)
-        display.text(text, 100, 100, scale=4)
+        display.text(text, 100, 140, scale=4)
+        text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}"
+        display.text(text, 80, 90, scale=4)
         display.update()
         time.sleep(1)
