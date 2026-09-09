@@ -52,18 +52,24 @@ try:
 except(RuntimeError): # same again
     got_bme280 = False
 
+got_ds18t20 = False
 try:
     ds_pin = machine.Pin(0)
     ds_sensor = ds18x20.DS18X20(onewire.OneWire(ds_pin))
-    got_ds18t20 = True
     thermometers = ds_sensor.scan()
+    if len(thermometers) > 0:
+        print(f"Found {len(thermometers)} ds18b20 Thermometers")
+        got_ds18t20 = True
 except(RuntimeError): # same again
     got_ds18t20 = False
     thermometers = []
+    print(f"Error checking for One Wire Thermometers : setting got_ds18t20 to {got_ds18t20}")
 thermometer_names = {
      "mug" : "2865b3e9050000d8",
      "cup" : "287a10ea05000052",
      "air" : "28d9aa2c06000071",
+     "default" : "28d9aa2c06000071",
+     "back yard" : "28c12cfb050000bf",
 }
 bar_width = 2
 
@@ -97,11 +103,11 @@ def get_bme_temp():
         readings = bme280.read()
         # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
         temperature = readings[0]
+    elif got_ds18t20:
+        temps = get_remote_temps(thermometers)
+        temperature = temps[thermometer_names["default"]]
     else:
         temperature = get_cpu_temp() - 1.75
-        # just briefly, overriding this to use "air" temp from the ds18b20s (without passing in the required variables...)
-        temps = get_remote_temps(thermometers)
-        temperature = temps[thermometer_names["air"]]
     return temperature
 
 def get_cpu_temp():
@@ -110,18 +116,21 @@ def get_cpu_temp():
     return temperature
 
 def get_remote_temps(ds18b20_thermometers):
-    ds_sensor.convert_temp()
-    time.sleep_ms(750)
     temperatures = {}
-    for thermometer in ds18b20_thermometers:
-        thermometer_id_hex = binascii.hexlify(thermometer)
-        thermometer_id = thermometer_id_hex.decode('ascii')
-        try:
-            temperature = ds_sensor.read_temp(thermometer)
-        except:
-            temperature = None
-        # print(f"Read {thermometer_id} got a reading of {temperature}")
-        temperatures[thermometer_id] = temperature
+    if got_ds18t20:
+        ds_sensor.convert_temp()
+        time.sleep_ms(750)
+        for thermometer in ds18b20_thermometers:
+            thermometer_id_hex = binascii.hexlify(thermometer)
+            thermometer_id = thermometer_id_hex.decode('ascii')
+            try:
+                temperature = ds_sensor.read_temp(thermometer)
+            except:
+                temperature = None
+            # print(f"Read {thermometer_id} got a reading of {temperature}")
+            temperatures[thermometer_id] = temperature
+    else:
+        temperatures["default"] = get_bme_temp()
     return temperatures
 
 def temperature_to_color(temp):
@@ -149,19 +158,27 @@ def temperature_to_color(temp):
     return colour
 
 def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
-    prev_t = data_block[0]
+    first_guess = 0
+    prev_t = data_block[first_guess]
+    while prev_t is None and first_guess < len(data_block) -1:
+        first_guess += 1
+        # print(f"looking at ppint {first_guess} in a list of {len(data_block)}")
+        prev_t = data_block[first_guess]
+    if prev_t is None:
+        return
     i = 0
-    for t in data_block[1:]:
-        rect_top, rect_thickness = ( 
-            calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
-                                  baseline, graph_scale)
-        )
-        colour_shade = calc_rectangle_colour(t, prev_t)
-        TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
-        display.set_pen(TEMPERATURE_COLOUR)
-        display.rectangle(i + top_left[0], rect_top + top_left[1], bar_width, rect_thickness)
+    for t in data_block[-135:]: # Needs to know how wide graph is - replace 135
+        if t:
+            rect_top, rect_thickness = ( 
+                calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
+                                    baseline, graph_scale)
+            )
+            colour_shade = calc_rectangle_colour(t, prev_t)
+            TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
+            display.set_pen(TEMPERATURE_COLOUR)
+            display.rectangle(i + top_left[0], rect_top + top_left[1], bar_width, rect_thickness)
+            prev_t = t
         i += bar_width
-        prev_t = t
 
 class data_buffer(object):
     """Originally conceived as a FIFO list to limit the size of gathered data
@@ -262,12 +279,20 @@ def plot_graphs(collection_o_graphable_thingies):
     max_values = []
     min_values = []
     for graphable_thingy in collection_o_graphable_thingies:
-        if len(graphable_thingy) == 0:
-            return
-        max_values.append(max(graphable_thingy))
+        dave_count = 0
+        dave = []
+        for x in  graphable_thingy:
+            if x is not None:
+                dave.append(x)
+                dave_count += 1
+        if len(dave) == 0:
+            continue
+        max_values.append(max(dave))
         # max_values.append(graphable_thingy.get_max())
         # min_values.append(graphable_thingy.get_min())
-        min_values.append(min(graphable_thingy))
+        min_values.append(min(dave))
+    if len(max_values) == 0:
+        return
     max_value = max(max_values)
     min_value = min(min_values)
     graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
@@ -400,7 +425,7 @@ graph_ranges = {
     "12 hours" : {"plot interval" : 360,
                   "marker scale" : "hours",
                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
-                  "keys" : ["mug", "cup", "air"],
+                  "keys" : ["bme temperature", "mug", "cup", "air"],
                   "log" : None,
                   },
     "Ram Usage" : {"plot interval" : 120,
@@ -466,8 +491,11 @@ while True:
             current_data[key] = current_cpu_temp
         elif key == "bme temperature" or key == "temperature":
             current_data[key] = current_bme_temp
-        elif (key == "mug" or key == "cup" or key == "air"):
-            current_data[key] = remote_temperatures[thermometer_names[key]]
+        elif (key == "mug" or key == "cup" or key == "air" or key == "back yard"):
+            try:
+                current_data[key] = remote_temperatures[thermometer_names[key]]
+            except(KeyError):
+                current_data[key] = None
         elif (key == "PreCollect"):
             current_data[key] = 100 - pre_free_mem / total_mem * 100
         elif (key == "PostCollect"):
@@ -488,7 +516,7 @@ while True:
         if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
             clock = time.localtime()
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            print(f"Adding a new record to {graph} @ {text}")
+            # print(f"Adding a new record to {graph} @ {text}")
             new_record = {}
             new_record["timestamp"] = text
             for key in graph_ranges[graph]["keys"]:
@@ -503,7 +531,7 @@ while True:
             if graph == "24 hours":
                 plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cpu temperature")])
             elif graph == "12 hours":
-                plot_graphs([graph_ranges[graph]["log"].get_data("mug"), graph_ranges[graph]["log"].get_data("cup"), graph_ranges[graph]["log"].get_data("air")])
+                plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cup"), graph_ranges[graph]["log"].get_data("air"), graph_ranges[graph]["log"].get_data("mug")])
             elif graph == "Ram Usage":
                 plot_graphs([graph_ranges[graph]["log"].get_data("PreCollect"), graph_ranges[graph]["log"].get_data("PostCollect")])
             else:
