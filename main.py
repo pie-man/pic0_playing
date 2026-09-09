@@ -64,6 +64,7 @@ thermometer_names = {
      "mug" : "2865b3e9050000d8",
      "cup" : "287a10ea05000052",
      "air" : "28d9aa2c06000071",
+     "back yard" : "28c12cfb050000bf",
 }
 bar_width = 2
 
@@ -149,19 +150,25 @@ def temperature_to_color(temp):
     return colour
 
 def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
-    prev_t = data_block[0]
+    first_guess = 0
+    prev_t = data_block[first_guess]
+    while prev_t is None:
+        first_guess += 1
+        # print(f"looking at ppint {first_guess} in a list of {len(data_block)}")
+        prev_t = data_block[first_guess]
     i = 0
-    for t in data_block[1:]:
-        rect_top, rect_thickness = ( 
-            calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
-                                  baseline, graph_scale)
-        )
-        colour_shade = calc_rectangle_colour(t, prev_t)
-        TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
-        display.set_pen(TEMPERATURE_COLOUR)
-        display.rectangle(i + top_left[0], rect_top + top_left[1], bar_width, rect_thickness)
+    for t in data_block[-135:]: # Needs to know how wide graph is - replace 135
+        if t:
+            rect_top, rect_thickness = ( 
+                calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
+                                    baseline, graph_scale)
+            )
+            colour_shade = calc_rectangle_colour(t, prev_t)
+            TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
+            display.set_pen(TEMPERATURE_COLOUR)
+            display.rectangle(i + top_left[0], rect_top + top_left[1], bar_width, rect_thickness)
+            prev_t = t
         i += bar_width
-        prev_t = t
 
 class data_buffer(object):
     """Originally conceived as a FIFO list to limit the size of gathered data
@@ -262,12 +269,20 @@ def plot_graphs(collection_o_graphable_thingies):
     max_values = []
     min_values = []
     for graphable_thingy in collection_o_graphable_thingies:
-        if len(graphable_thingy) == 0:
-            return
-        max_values.append(max(graphable_thingy))
+        dave_count = 0
+        dave = []
+        for x in  graphable_thingy:
+            if x is not None:
+                dave.append(x)
+                dave_count += 1
+        if len(dave) == 0:
+            continue
+        max_values.append(max(dave))
         # max_values.append(graphable_thingy.get_max())
         # min_values.append(graphable_thingy.get_min())
-        min_values.append(min(graphable_thingy))
+        min_values.append(min(dave))
+    if len(max_values) == 0:
+        return
     max_value = max(max_values)
     min_value = min(min_values)
     graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
@@ -488,7 +503,7 @@ while True:
         if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
             clock = time.localtime()
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            print(f"Adding a new record to {graph} @ {text}")
+            # print(f"Adding a new record to {graph} @ {text}")
             new_record = {}
             new_record["timestamp"] = text
             for key in graph_ranges[graph]["keys"]:
