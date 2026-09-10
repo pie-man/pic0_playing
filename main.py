@@ -417,6 +417,7 @@ for log_file in log_files.keys():
     free()
     new_log = Log_File(name, graph_points, 5, log_keys)
     log_files[log_file]["log"] = new_log
+    log_files[log_file]["changed"] = False
 
 current_bme_temp = get_bme_temp()
 readout_update = 1000 # m seconds
@@ -444,6 +445,7 @@ for graph in list_o_graphs:
         all_graph_keys.add(key)
     graph_ranges[graph]["readings_count"] = 0
     graph_ranges[graph]["last reading"] = time.ticks_ms()
+    graph_ranges[graph]["changed"] = True
 
 # graph_updates = [True for x in range(len(list_o_graphs))]
 log_updates = [True for x in range(len(list_o_logs))]
@@ -494,21 +496,20 @@ while True:
     # Update the logs, and write out if required.
     for count, log in enumerate(list_o_logs):
         current_log = log_files[log]
-        log_changed = False
+        reading_made = False
         for key in current_data.keys():
             if f"{key}_total" in current_log:
                 # print(f"Adding current_data[{key if current_data[key] else "bugger all"}] to {log}[{key}_total]")
                 current_value = current_log[f"{key}_total"]
                 current_value = current_value + current_data[key] if current_data[key] else current_value
                 current_log[f"{key}_total"] = current_value
-                log_changed = True
-        current_log["changed"] = log_changed
-        if log_changed:
+                reading_made = True
+        if reading_made:
             current_log["readings_count"] += 1
         if time.ticks_diff(time.ticks_ms(), current_log["last reading"]) >= current_log["log interval"] * 1000:
             clock = time.localtime()
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            print(f"Adding a new record to {log} @ {text}")
+            # print(f"Adding a new record to log \"{log}\" @ {text}")
             new_record = {}
             new_record["timestamp"] = text
             for key in current_log["keys"]:
@@ -517,63 +518,31 @@ while True:
             current_log["log"].add_record(new_record)
             current_log["last reading"] = time.ticks_ms()
             current_log["readings_count"] = 0
-        #     graph_updates[count] = True
+            current_log["changed"] = True
+         #     graph_updates[count] = True
 
     for count, graph in enumerate(list_o_graphs):
-        current_graph = graph_ranges[graph]
-        logs = current_graph["logs"]
-        print(f"About to check {logs} for changes...")
-        for log in logs:
-            if log_files[log]["changed"]:
-                current_graph["changed"] = True
-        if count == current_graph_no and current_graph["changed"]:
+        if count == current_graph_no: # and current_graph["changed"]:
+            current_graph = graph_ranges[graph]
+            logs = current_graph["logs"]
+            # print(f"About to check these logs : {logs} for changes...")
+            for log in logs:
+                if log_files[log]["changed"]:
+                    # print(f"I see changed logs. ..... oh and dead people.")
+                    current_graph["changed"] = True
+                    log_files[log]["changed"] = False
+            if not current_graph["changed"]:
+                continue
             title = graph
             write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
             data_streams = []
             for log in logs:
                 keys_required = set(current_graph["keys"]).intersection(set(log_files[log]["keys"]))
-                print(f"For graph {title}, looking at log {log} with keys {log_files[log]["keys"]} - Picking {keys_required}")
+                # print(f"For graph {title}, looking at log {log} with keys {log_files[log]["keys"]} - Picking {keys_required}")
                 for key in keys_required:
                     data_streams.append(log_files[log]["log"].get_data(key))
                 plot_graphs(data_streams)
             current_graph["changed"] = False
-
-        # changed = False
-        # print(f"Skipping graph_plot for \"{graph}\", count = {count}")
-        # for key in current_data.keys():
-        #     if f"{key}_total" in graph_ranges[graph]:
-        #         # print(f"Adding current_data[{key if current_data[key] else "bugger all"}] to {graph}[{key}_total]")
-        #         value = graph_ranges[graph][f"{key}_total"] + current_data[key] if current_data[key] else graph_ranges[graph][f"{key}_total"]
-        #         graph_ranges[graph][f"{key}_total"] = value
-        #         changed = True
-        # if changed:
-        #     graph_ranges[graph]["readings_count"] += 1
-        # if time.ticks_diff(time.ticks_ms(), graph_ranges[graph]["last reading"]) >= graph_ranges[graph]["plot interval"] * 1000:
-        #     clock = time.localtime()
-        #     text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-        #     # print(f"Adding a new record to {graph} @ {text}")
-        #     new_record = {}
-        #     new_record["timestamp"] = text
-        #     for key in graph_ranges[graph]["keys"]:
-        #         new_record[key] = graph_ranges[graph][f"{key}_total"] / graph_ranges[graph]["readings_count"]
-        #         graph_ranges[graph][f"{key}_total"] = 0
-        #     graph_ranges[graph]["log"].add_record(new_record)
-        #     graph_ranges[graph]["last reading"] = time.ticks_ms()
-        #     graph_ranges[graph]["readings_count"] = 0
-        #     graph_updates[count] = True
-        # if count == current_graph_no and graph_updates[count]:
-        #     title = graph
-        #     if graph == "24 hours":
-        #         plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cpu temperature")])
-        #     elif graph == "12 hours":
-        #         plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cup"), graph_ranges[graph]["log"].get_data("air"), graph_ranges[graph]["log"].get_data("mug")])
-        #     elif graph == "Ram Usage":
-        #         plot_graphs([graph_ranges[graph]["log"].get_data("PreCollect"), graph_ranges[graph]["log"].get_data("PostCollect")])
-        #     else:
-        #         plot_graphs([graph_ranges[graph]["log"].get_data("temperature")])
-        #     graph_updates[count] = False
-            # write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
-    # print(f"{graph_updates}")
 
     update_count += 1
     if update_count >= change_over:
@@ -584,8 +553,7 @@ while True:
         # fills the screen with black
         display.set_pen(BLACK)
         display.clear()
-        current_graph["changed"] = False
-
+        graph_ranges[list_o_graphs[current_graph_no]]["changed"] = True
 
     # heck lets also set the LED to match
     # But cut the brightness to about 5%
