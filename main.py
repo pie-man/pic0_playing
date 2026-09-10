@@ -65,13 +65,10 @@ except(RuntimeError): # same again
     got_ds18t20 = False
     thermometers = []
     print(f"Error checking for One Wire Thermometers : setting got_ds18t20 to {got_ds18t20}")
-thermometer_names = one_wire_sensor #{
-#      "mug" : "2865b3e9050000d8",
-#      "cup" : "287a10ea05000052",
-#      "air" : "28d9aa2c06000071",
-#      "default" : "28d9aa2c06000071",
-#      "back yard" : "28c12cfb050000bf",
-# }
+thermometers_by_ID = {}
+for key, value in one_wire_sensor.items():
+    thermometers_by_ID[value] = key
+
 bar_width = 2
 
 cpu_temperatures = []
@@ -104,11 +101,8 @@ def get_bme_temp():
         readings = bme280.read()
         # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
         temperature = readings[0]
-    elif got_ds18t20:
-        temps = get_remote_temps(thermometers)
-        temperature = temps[thermometer_names["default"]]
     else:
-        temperature = get_cpu_temp() - 1.75
+        temperature = None
     return temperature
 
 def get_cpu_temp():
@@ -119,8 +113,13 @@ def get_cpu_temp():
 def get_remote_temps(ds18b20_thermometers):
     temperatures = {}
     if got_ds18t20:
-        ds_sensor.convert_temp()
-        time.sleep_ms(750)
+        try:
+            ds_sensor.convert_temp()
+            time.sleep_ms(750)
+        except(KeyboardInterrupt):
+            raise
+        except:
+            print(f"Got an Error in OneWire Lib...")
         for thermometer in ds18b20_thermometers:
             thermometer_id_hex = binascii.hexlify(thermometer)
             thermometer_id = thermometer_id_hex.decode('ascii')
@@ -128,11 +127,23 @@ def get_remote_temps(ds18b20_thermometers):
                 temperature = ds_sensor.read_temp(thermometer)
             except:
                 temperature = None
-            # print(f"Read {thermometer_id} got a reading of {temperature}")
+                print(f"Something awry reading thermometer : ")
+                print(f"Thermometer ID is {thermometer_id} ")
+                print(f"Was trying to look at {thermometers_by_ID[thermometer_id]}")
+            # print(f"Read {thermometer_id} \"{thermometers_by_ID[thermometer_id]}\" got a reading of {temperature}")
             temperatures[thermometer_id] = temperature
-    else:
-        temperatures["default"] = get_bme_temp()
     return temperatures
+
+def get_default_temp(current_bme_temp, current_cpu_temp, remote_temperatures,
+                     one_wire_sensor, got_bme280, got_bme69x, got_ds18t20):
+    default_temp = None
+    if got_bme280 or got_bme69x:
+        default_temp = current_bme_temp
+    elif got_ds18t20:
+        default_temp = remote_temperatures[one_wire_sensor["default"]]
+    else:
+        default_temp = current_cpu_temp - 2.5
+    return default_temp
 
 def temperature_to_color(temp):
     upper_reg = temp_limits[-1][0]
@@ -169,7 +180,7 @@ def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
         return
     i = 0
     for t in data_block[-135:]: # Needs to know how wide graph is - replace 135
-        if t:
+        if t is not None:
             rect_top, rect_thickness = ( 
                 calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
                                     baseline, graph_scale)
@@ -279,6 +290,7 @@ def plot_graphs(collection_o_graphable_thingies):
     # End of TODO block - hopefully
     max_values = []
     min_values = []
+    print(f"Gonna try plotting a graph wi {len(collection_o_graphable_thingies)} things awn it!")
     for graphable_thingy in collection_o_graphable_thingies:
         dave_count = 0
         dave = []
@@ -286,18 +298,24 @@ def plot_graphs(collection_o_graphable_thingies):
             if x is not None:
                 dave.append(x)
                 dave_count += 1
+        print(f"That yin had {dave_count} bits O useful data", end="")
         if len(dave) == 0:
+            print("")
             continue
         max_values.append(max(dave))
         # max_values.append(graphable_thingy.get_max())
         # min_values.append(graphable_thingy.get_min())
         min_values.append(min(dave))
+        print(f"Geein us a Max value O {max(dave)} an a Min value O {min(dave)}")
+        if len(dave) <=10 or min(dave) < 0.009 or max(dave) < 0.009:
+            print(dave)
     if len(max_values) == 0:
+        print(f"Got nay Max Values to set a scale by. Bailin ooot.")
         return
     max_value = max(max_values)
     min_value = min(min_values)
     graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
-    # print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
+    print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
     tick_marks = calc_tick_marks(graph_height, graph_scale)
     # clear the plotting rectangle here...
     # draws a white background for the text
@@ -329,6 +347,42 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     # writes the reading as text in the white rectangle
     display.set_pen(ink)
     display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
+
+def add_to_a_log(log_name, current_data, log_files_dict):
+        current_log = log_files_dict[log_name]
+        reading_made = False
+        for key in current_data.keys(): # current_data contains ALL keys, current_log ony has some.
+            if f"{key}_total" in current_log:
+                # print(f"Adding current_data[{key if current_data[key] else "bugger all"}] to {log_name}[{key}_total]")
+                current_value = current_log[f"{key}_total"]
+                if current_value is not None:
+                    current_value = current_value + current_data[key] if current_data[key] is not None else current_value
+                elif current_data[key] is not None:
+                    current_value = current_data[key]
+                current_log[f"{key}_total"] = current_value
+                reading_made = True
+        if reading_made:
+            current_log["readings_count"] += 1
+        if time.ticks_diff(time.ticks_ms(), current_log["last reading"]) >= current_log["log interval"] * 1000:
+            clock = time.localtime()
+            text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+            # print(f"Adding a new record to log \"{log_name}\" @ {text}")
+            new_record = {}
+            new_record["timestamp"] = text
+            print(f"Current log is {current_log["log"].name} : ")
+            for key in current_log["keys"]:
+                if current_log[f"{key}_total"] is not None:
+                    new_record[key] = current_log[f"{key}_total"] / current_log["readings_count"]
+                else:
+                    new_record[key] = None
+                print(f"{key} : {new_record[key]}", end=" # ")
+                current_log[f"{key}_total"] = None
+            print("..done\n")
+            current_log["log"].add_record(new_record)
+            current_log["last reading"] = time.ticks_ms()
+            current_log["readings_count"] = 0
+            current_log["changed"] = True
+        return log_files_dict
 
 # set the time..
 if hardware["WiFi"]:
@@ -409,32 +463,38 @@ time.sleep(10)
 
 graph_points = int(GRAPH_WIDTH // bar_width) # Almost certainly shouldn't be worked out here... but it limits the length of a log
 # which perhaps should be "disconnected" from the no. of points in a graph when an X scale is deployed.
-for log_file in log_files.keys():
-    name = f"{log_file.replace(" ", "_")}.txt"
-    # data_len = graph_ranges[graph_type]["plt_interval"] * graph_points
+
+list_o_logs = list(log_files.keys())
+all_log_keys = set()
+for log_file_name in log_files.keys():
+    file_name = f"{log_file_name.replace(" ", "_")}.txt"
+    current_log = log_files[log_file_name]
     log_keys = ["timestamp"]
-    log_keys.extend(log_files[log_file]["keys"])
+    log_keys.extend(current_log["keys"])
+    max_records = current_log["max records"] if "max records" in current_log else 135
+    buffer_size = current_log["buffer size"] if "buffer size" in current_log else 5
     free()
-    new_log = Log_File(name, graph_points, 5, log_keys)
-    log_files[log_file]["log"] = new_log
-    log_files[log_file]["changed"] = False
+    new_log = Log_File(file_name, max_records, buffer_size, log_keys)
+    free()
+    current_log["log"] = new_log
+    current_log["changed"] = False
+    for key in current_log["keys"]:
+        current_log[f"{key}_total"] = None
+        all_log_keys.add(key)
+    current_log["readings_count"] = 0
+    current_log["last reading"] = time.ticks_ms()
+# list_o_logs = list(log_files.keys())
+# all_log_keys = set()
+# for log_file_name in list_o_logs:
 
 current_bme_temp = get_bme_temp()
 readout_update = 1000 # m seconds
 
 update_count = 0
-change_over = 60
+change_over = 30
 current_graph_no = 0
 
-max_logs = len(log_files)
-list_o_logs = list(log_files.keys())
-all_log_keys = set()
-for log in list_o_logs:
-    for key in log_files[log]["keys"]:
-        log_files[log][f"{key}_total"] = 0
-        all_log_keys.add(key)
-    log_files[log]["readings_count"] = 0
-    log_files[log]["last reading"] = time.ticks_ms()
+
 
 max_graphs = len(graph_ranges)
 list_o_graphs = list(graph_ranges.keys())
@@ -459,6 +519,7 @@ total_mem = pre_free_mem + pre_alloc_mem
 free()
 post_free_mem = gc.mem_free()
 
+print("Launching main loop now:\n")
 while True:
     tm_at_start = time.ticks_ms()
     # fills the screen with black
@@ -472,6 +533,10 @@ while True:
 
     remote_temperatures = get_remote_temps(thermometers)
 
+    default_temp = get_default_temp(current_bme_temp, current_cpu_temp,
+                                    remote_temperatures, one_wire_sensor,
+                                    got_bme280, got_bme69x, got_ds18t20)
+
     pre_free_mem = gc.mem_free()
     free()
     post_free_mem = gc.mem_free()
@@ -479,47 +544,63 @@ while True:
     for key in all_log_keys:
         if key == "cpu temperature":
             current_data[key] = current_cpu_temp
-        elif key == "bme temperature" or key == "temperature":
+        elif key == "bme temperature":
             current_data[key] = current_bme_temp
-        elif (key == "mug" or key == "cup" or key == "air" or key == "back yard"):
-            try:
-                current_data[key] = remote_temperatures[thermometer_names[key]]
-            except(KeyError):
-                current_data[key] = None
         elif (key == "PreCollect"):
             current_data[key] = 100 - pre_free_mem / total_mem * 100
         elif (key == "PostCollect"):
             current_data[key] = 100 - post_free_mem / total_mem * 100
+        elif (key in one_wire_sensor):
+            try:
+                current_data[key] = remote_temperatures[one_wire_sensor[key]]
+            except(KeyError):
+                current_data[key] = None
         else:
-            current_data[key] = None
+            current_data[key] = default_temp
+    #     try:
+    #         Thing_t_print = f"{current_data[key]:02.2f}" if current_data[key] else f"{current_data[key]}"
+    #     except:
+    #         print(f"Couldnee turn {current_data[key]} into summat useful")
+    #         Thing_t_print = "{current_data[key]}"
+    #     print(f"{key} : {Thing_t_print} #", end=" ")
+    # print("done")
 
     # Update the logs, and write out if required.
-    for count, log in enumerate(list_o_logs):
-        current_log = log_files[log]
-        reading_made = False
-        for key in current_data.keys():
-            if f"{key}_total" in current_log:
-                # print(f"Adding current_data[{key if current_data[key] else "bugger all"}] to {log}[{key}_total]")
-                current_value = current_log[f"{key}_total"]
-                current_value = current_value + current_data[key] if current_data[key] else current_value
-                current_log[f"{key}_total"] = current_value
-                reading_made = True
-        if reading_made:
-            current_log["readings_count"] += 1
-        if time.ticks_diff(time.ticks_ms(), current_log["last reading"]) >= current_log["log interval"] * 1000:
-            clock = time.localtime()
-            text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-            # print(f"Adding a new record to log \"{log}\" @ {text}")
-            new_record = {}
-            new_record["timestamp"] = text
-            for key in current_log["keys"]:
-                new_record[key] = current_log[f"{key}_total"] / current_log["readings_count"]
-                current_log[f"{key}_total"] = 0
-            current_log["log"].add_record(new_record)
-            current_log["last reading"] = time.ticks_ms()
-            current_log["readings_count"] = 0
-            current_log["changed"] = True
-         #     graph_updates[count] = True
+    for log in list_o_logs:
+        # current_log = log_files[log]
+        # reading_made = False
+        # for key in current_data.keys():
+        #     if f"{key}_total" in current_log:
+        #         # print(f"Adding current_data[{key if current_data[key] else "bugger all"}] to {log}[{key}_total]")
+        #         current_value = current_log[f"{key}_total"]
+        #         if current_value is not None:
+        #             current_value = current_value + current_data[key] if current_data[key] is not None else current_value
+        #         elif current_data[key] is not None:
+        #             current_value = current_data[key]
+        #         current_log[f"{key}_total"] = current_value
+        #         reading_made = True
+        # if reading_made:
+        #     current_log["readings_count"] += 1
+        # if time.ticks_diff(time.ticks_ms(), current_log["last reading"]) >= current_log["log interval"] * 1000:
+        #     clock = time.localtime()
+        #     text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+        #     # print(f"Adding a new record to log \"{log}\" @ {text}")
+        #     new_record = {}
+        #     new_record["timestamp"] = text
+        #     print(f"Cuurent log is {current_log["log"].name} : ")
+        #     for key in current_log["keys"]:
+        #         if current_log[f"{key}_total"] is not None:
+        #             new_record[key] = current_log[f"{key}_total"] / current_log["readings_count"]
+        #         else:
+        #             new_record[key] = None
+        #         print(f"{key} : {new_record[key]}", end=" # ")
+        #         current_log[f"{key}_total"] = None
+        #     print("..done\n")
+        #     current_log["log"].add_record(new_record)
+        #     current_log["last reading"] = time.ticks_ms()
+        #     current_log["readings_count"] = 0
+        #     current_log["changed"] = True
+        log_files = add_to_a_log(log, current_data, log_files)
 
     for count, graph in enumerate(list_o_graphs):
         if count == current_graph_no: # and current_graph["changed"]:
@@ -528,7 +609,7 @@ while True:
             # print(f"About to check these logs : {logs} for changes...")
             for log in logs:
                 if log_files[log]["changed"]:
-                    # print(f"I see changed logs. ..... oh and dead people.")
+                    print(f"I see changed logs for graph {graph}. ..... oh and I see dead people.")
                     current_graph["changed"] = True
                     log_files[log]["changed"] = False
             if not current_graph["changed"]:
@@ -541,6 +622,7 @@ while True:
                 # print(f"For graph {title}, looking at log {log} with keys {log_files[log]["keys"]} - Picking {keys_required}")
                 for key in keys_required:
                     data_streams.append(log_files[log]["log"].get_data(key))
+                    free()
                 plot_graphs(data_streams)
             current_graph["changed"] = False
 
@@ -556,17 +638,20 @@ while True:
         graph_ranges[list_o_graphs[current_graph_no]]["changed"] = True
 
     # heck lets also set the LED to match
-    # But cut the brightness to about 5%
-    led_colour = [round(val * 0.05) for val in temperature_to_color(current_bme_temp)]
+    # But cut the brightness to about 5%. It really is very bright.
+    if default_temp is not None:
+        led_colour = [round(val * 0.05) for val in temperature_to_color(default_temp)]
+        text = "{:02.2f}".format(default_temp) + "c"
+    else:
+        led_colour = [0,0,0]
+        text = "No Temp"
     led.set_rgb(*led_colour)
 
-    text = "{:.2f}".format(current_bme_temp) + "c"
     write_text_in_a_box(text, (0, 0), 100, 26, WHITE, BLACK)
 
     clock = time.localtime()
     text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
     write_text_in_a_box(text, (200, 0), 120, 26, BLUE, BLACK)
-
 
     # time to update the display
     display.update()
