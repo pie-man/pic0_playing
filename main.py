@@ -310,6 +310,7 @@ def plot_graphs(collection_o_graphable_thingies):
         if len(dave) <=10 or min(dave) < 0.009 or max(dave) < 0.009:
             print(dave)
     if len(max_values) == 0:
+        write_text_in_a_box("No Data Found", (10,50), WIDTH - 20, HEIGHT - 100, BLUE, WHITE, scale=3)
         print(f"Got nay Max Values to set a scale by. Bailin ooot.")
         return
     max_value = max(max_values)
@@ -383,6 +384,51 @@ def add_to_a_log(log_name, current_data, log_files_dict):
             current_log["readings_count"] = 0
             current_log["changed"] = True
         return log_files_dict
+
+def take_readings(thermometers, one_wire_sensor,
+                  got_bme280, got_bme69x,
+                  got_ds18t20, all_log_keys):
+    current_data = {}
+    current_data["time_of_readings"] = time.ticks_ms()
+
+    # Take Sensor readings
+    current_bme_temp = get_bme_temp()
+    current_cpu_temp = get_cpu_temp()
+
+    remote_temperatures = get_remote_temps(thermometers)
+
+    default_temp = get_default_temp(current_bme_temp, current_cpu_temp,
+                                    remote_temperatures, one_wire_sensor,
+                                    got_bme280, got_bme69x, got_ds18t20)
+
+    pre_free_mem = gc.mem_free()
+    free()
+    post_free_mem = gc.mem_free()
+
+    for key in all_log_keys:
+        if key == "cpu temperature":
+            current_data[key] = current_cpu_temp
+        elif key == "bme temperature":
+            current_data[key] = current_bme_temp
+        elif (key == "PreCollect"):
+            current_data[key] = 100 - pre_free_mem / total_mem * 100
+        elif (key == "PostCollect"):
+            current_data[key] = 100 - post_free_mem / total_mem * 100
+        elif (key in one_wire_sensor):
+            try:
+                current_data[key] = remote_temperatures[one_wire_sensor[key]]
+            except(KeyError):
+                current_data[key] = None
+        else:
+            current_data[key] = default_temp
+    #     try:
+    #         Thing_t_print = f"{current_data[key]:02.2f}" if current_data[key] else f"{current_data[key]}"
+    #     except:
+    #         print(f"Couldnee turn {current_data[key]} into summat useful")
+    #         Thing_t_print = "{current_data[key]}"
+    #     print(f"{key} : {Thing_t_print} #", end=" ")
+    # print("done")
+    return default_temp, current_data
 
 # set the time..
 if hardware["WiFi"]:
@@ -522,84 +568,51 @@ post_free_mem = gc.mem_free()
 print("Launching main loop now:\n")
 while True:
     tm_at_start = time.ticks_ms()
-    # fills the screen with black
-    # display.set_pen(BLACK)
-    # display.clear()
 
-    current_data = {}
-    # Take Sensor readings
-    current_bme_temp = get_bme_temp()
-    current_cpu_temp = get_cpu_temp()
+    default_temp, current_data = take_readings(thermometers, one_wire_sensor,
+                                               got_bme280, got_bme69x,
+                                               got_ds18t20, all_log_keys)
+    # current_data = {}
+    # # Take Sensor readings
+    # current_bme_temp = get_bme_temp()
+    # current_cpu_temp = get_cpu_temp()
 
-    remote_temperatures = get_remote_temps(thermometers)
+    # remote_temperatures = get_remote_temps(thermometers)
 
-    default_temp = get_default_temp(current_bme_temp, current_cpu_temp,
-                                    remote_temperatures, one_wire_sensor,
-                                    got_bme280, got_bme69x, got_ds18t20)
+    # default_temp = get_default_temp(current_bme_temp, current_cpu_temp,
+    #                                 remote_temperatures, one_wire_sensor,
+    #                                 got_bme280, got_bme69x, got_ds18t20)
 
-    pre_free_mem = gc.mem_free()
-    free()
-    post_free_mem = gc.mem_free()
+    # pre_free_mem = gc.mem_free()
+    # free()
+    # post_free_mem = gc.mem_free()
 
-    for key in all_log_keys:
-        if key == "cpu temperature":
-            current_data[key] = current_cpu_temp
-        elif key == "bme temperature":
-            current_data[key] = current_bme_temp
-        elif (key == "PreCollect"):
-            current_data[key] = 100 - pre_free_mem / total_mem * 100
-        elif (key == "PostCollect"):
-            current_data[key] = 100 - post_free_mem / total_mem * 100
-        elif (key in one_wire_sensor):
-            try:
-                current_data[key] = remote_temperatures[one_wire_sensor[key]]
-            except(KeyError):
-                current_data[key] = None
-        else:
-            current_data[key] = default_temp
-    #     try:
-    #         Thing_t_print = f"{current_data[key]:02.2f}" if current_data[key] else f"{current_data[key]}"
-    #     except:
-    #         print(f"Couldnee turn {current_data[key]} into summat useful")
-    #         Thing_t_print = "{current_data[key]}"
-    #     print(f"{key} : {Thing_t_print} #", end=" ")
-    # print("done")
+    # for key in all_log_keys:
+    #     if key == "cpu temperature":
+    #         current_data[key] = current_cpu_temp
+    #     elif key == "bme temperature":
+    #         current_data[key] = current_bme_temp
+    #     elif (key == "PreCollect"):
+    #         current_data[key] = 100 - pre_free_mem / total_mem * 100
+    #     elif (key == "PostCollect"):
+    #         current_data[key] = 100 - post_free_mem / total_mem * 100
+    #     elif (key in one_wire_sensor):
+    #         try:
+    #             current_data[key] = remote_temperatures[one_wire_sensor[key]]
+    #         except(KeyError):
+    #             current_data[key] = None
+    #     else:
+    #         current_data[key] = default_temp
+    # #     try:
+    # #         Thing_t_print = f"{current_data[key]:02.2f}" if current_data[key] else f"{current_data[key]}"
+    # #     except:
+    # #         print(f"Couldnee turn {current_data[key]} into summat useful")
+    # #         Thing_t_print = "{current_data[key]}"
+    # #     print(f"{key} : {Thing_t_print} #", end=" ")
+    # # print("done")
 
     # Update the logs, and write out if required.
     for log in list_o_logs:
-        # current_log = log_files[log]
-        # reading_made = False
-        # for key in current_data.keys():
-        #     if f"{key}_total" in current_log:
-        #         # print(f"Adding current_data[{key if current_data[key] else "bugger all"}] to {log}[{key}_total]")
-        #         current_value = current_log[f"{key}_total"]
-        #         if current_value is not None:
-        #             current_value = current_value + current_data[key] if current_data[key] is not None else current_value
-        #         elif current_data[key] is not None:
-        #             current_value = current_data[key]
-        #         current_log[f"{key}_total"] = current_value
-        #         reading_made = True
-        # if reading_made:
-        #     current_log["readings_count"] += 1
-        # if time.ticks_diff(time.ticks_ms(), current_log["last reading"]) >= current_log["log interval"] * 1000:
-        #     clock = time.localtime()
-        #     text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
-        #     # print(f"Adding a new record to log \"{log}\" @ {text}")
-        #     new_record = {}
-        #     new_record["timestamp"] = text
-        #     print(f"Cuurent log is {current_log["log"].name} : ")
-        #     for key in current_log["keys"]:
-        #         if current_log[f"{key}_total"] is not None:
-        #             new_record[key] = current_log[f"{key}_total"] / current_log["readings_count"]
-        #         else:
-        #             new_record[key] = None
-        #         print(f"{key} : {new_record[key]}", end=" # ")
-        #         current_log[f"{key}_total"] = None
-        #     print("..done\n")
-        #     current_log["log"].add_record(new_record)
-        #     current_log["last reading"] = time.ticks_ms()
-        #     current_log["readings_count"] = 0
-        #     current_log["changed"] = True
         log_files = add_to_a_log(log, current_data, log_files)
 
     for count, graph in enumerate(list_o_graphs):
