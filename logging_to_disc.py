@@ -14,7 +14,7 @@ class Log_File(object):
         self.record_len = len(keys)
         self.data = []
         try:
-            print(f"Starter for 10 : {filename}")
+            # print(f"Starter for 10 : {filename}")
             fh = open(filename, "r")
             # print("open")
             fh.close()
@@ -56,11 +56,11 @@ class Log_File(object):
         selected in self.keys will become part of a record, and those not given in self.keys will be discarded
         Ultimately this allows for changes in mind of the contents of data logs with the potential to discard data types
         no longer used, and populate historic records with None entries when new data types are added."""
-        print(f"reading...  {self.name}")
+        # print(f"reading...  {self.name}")
         with open(self.name, "r") as fh:
             # print("open..")
             keys_as_text = fh.readline().strip()
-            print(f"read keys as : {keys_as_text}")
+            # print(f"read keys as : {keys_as_text}")
             file_keys = keys_as_text.split(",")
             data_read = 0
             for line in fh:
@@ -81,7 +81,7 @@ class Log_File(object):
                     data_dict[thing] = data_vals[count]
                 self.add_record(data_dict, len_check=False)
                 data_read += 1
-            print(f"read {data_read} bits of data")
+            # print(f"read {data_read} bits of data")
 
     def write_data(self):
         """Opens an empty file (potentially overwriting), and dumps the latest self.max_len records
