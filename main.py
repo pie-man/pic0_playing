@@ -134,15 +134,15 @@ def get_remote_temps(ds18b20_thermometers):
             temperatures[thermometer_id] = temperature
     return temperatures
 
-def get_default_temp(current_bme_temp, current_cpu_temp, remote_temperatures,
-                     one_wire_sensor, got_bme280, got_bme69x, got_ds18t20):
+def get_default_temp(bme_temp, cpu_temp, one_wire_readings,
+                     one_wire_IDs, got_bme280, got_bme69x, got_ds18t20):
     default_temp = None
     if got_bme280 or got_bme69x:
-        default_temp = current_bme_temp
+        default_temp = bme_temp
     elif got_ds18t20:
-        default_temp = remote_temperatures[one_wire_sensor["default"]]
+        default_temp = one_wire_readings[one_wire_IDs["default"]]
     else:
-        default_temp = current_cpu_temp - 2.5
+        default_temp = cpu_temp - 2.5
     return default_temp
 
 def temperature_to_color(temp):
@@ -290,6 +290,7 @@ def plot_graphs(collection_o_graphable_thingies):
     # End of TODO block - hopefully
     max_values = []
     min_values = []
+    max_data_length = -30
     print(f"Gonna try plotting a graph wi {len(collection_o_graphable_thingies)} things awn it!")
     for graphable_thingy in collection_o_graphable_thingies:
         dave_count = 0
@@ -298,7 +299,8 @@ def plot_graphs(collection_o_graphable_thingies):
             if x is not None:
                 dave.append(x)
                 dave_count += 1
-        print(f"That yin had {dave_count} bits O useful data", end="")
+        print(f"That yin had {dave_count} bits O useful data. ", end="")
+        max_data_length = max(max_data_length, dave_count)
         if len(dave) == 0:
             print("")
             continue
@@ -310,7 +312,7 @@ def plot_graphs(collection_o_graphable_thingies):
         if len(dave) <=10 or min(dave) < 0.009 or max(dave) < 0.009:
             print(dave)
     if len(max_values) == 0:
-        write_text_in_a_box("No Data Found", (10,50), WIDTH - 20, HEIGHT - 100, BLUE, WHITE, scale=3)
+        write_text_in_a_box("No Data Found", (10,50), WIDTH - 20, HEIGHT - 100, BLUE, WHITE, scale=5)
         print(f"Got nay Max Values to set a scale by. Bailin ooot.")
         return
     max_value = max(max_values)
@@ -347,9 +349,9 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.rectangle(TopLeft[0], TopLeft[1], width, height)
     # writes the reading as text in the white rectangle
     display.set_pen(ink)
-    display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
+    display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, width - 8, scale=scale)
 
-def add_to_a_log(log_name, current_data, log_files_dict):
+def add_to_a_log(log_name, current_data, log_files_dict, force=False):
         current_log = log_files_dict[log_name]
         reading_made = False
         for key in current_data.keys(): # current_data contains ALL keys, current_log ony has some.
@@ -364,7 +366,7 @@ def add_to_a_log(log_name, current_data, log_files_dict):
                 reading_made = True
         if reading_made:
             current_log["readings_count"] += 1
-        if time.ticks_diff(time.ticks_ms(), current_log["last reading"]) >= current_log["log interval"] * 1000:
+        if time.ticks_diff(time.ticks_ms(), current_log["last reading"]) >= current_log["log interval"] * 1000 or force:
             clock = time.localtime()
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
             # print(f"Adding a new record to log \"{log_name}\" @ {text}")
@@ -505,22 +507,33 @@ text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}"
 write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
 display.update()
 top_left[1] += 30
-time.sleep(10)
 
-graph_points = int(GRAPH_WIDTH // bar_width) # Almost certainly shouldn't be worked out here... but it limits the length of a log
-# which perhaps should be "disconnected" from the no. of points in a graph when an X scale is deployed.
+# Calculate total memory on device
+free_mem = gc.mem_free()
+allocated_mem = gc.mem_alloc()
+total_mem = free_mem + allocated_mem
+lines = [f"Total memory is ", f"{total_mem}", f"{free_mem} free", f"{allocated_mem} allocated"]
+for text in lines:
+    print(f"{text}", end=" : ")
+    write_text_in_a_box(text, top_left, 310, 30, BLACK, BLUE, 3)
+    top_left[1] += 30
+display.update()
+print("")
 
+time.sleep(5)
+
+# Set up (expand) the dictionary tracking all the log files
 list_o_logs = list(log_files.keys())
 all_log_keys = set()
-for log_file_name in log_files.keys():
-    file_name = f"{log_file_name.replace(" ", "_")}.txt"
-    current_log = log_files[log_file_name]
+for log_name in list_o_logs:
+    log_file_name = f"{log_name.replace(" ", "_")}.txt"
+    current_log = log_files[log_name]
     log_keys = ["timestamp"]
     log_keys.extend(current_log["keys"])
     max_records = current_log["max records"] if "max records" in current_log else 135
     buffer_size = current_log["buffer size"] if "buffer size" in current_log else 5
     free()
-    new_log = Log_File(file_name, max_records, buffer_size, log_keys)
+    new_log = Log_File(log_file_name, max_records, buffer_size, log_keys)
     free()
     current_log["log"] = new_log
     current_log["changed"] = False
@@ -529,28 +542,31 @@ for log_file_name in log_files.keys():
         all_log_keys.add(key)
     current_log["readings_count"] = 0
     current_log["last reading"] = time.ticks_ms()
-# list_o_logs = list(log_files.keys())
-# all_log_keys = set()
-# for log_file_name in list_o_logs:
 
-current_bme_temp = get_bme_temp()
+# Take initial readings
+default_temp, current_data = take_readings(thermometers, one_wire_sensor,
+                                           got_bme280, got_bme69x,
+                                           got_ds18t20, all_log_keys)
+
+# Now add those intial readings to all logs (forcibly)
+for log_name in list_o_logs:
+    log_files = add_to_a_log(log_name, current_data, log_files, force=True)
+
 readout_update = 1000 # m seconds
 
 update_count = 0
 change_over = 30
 current_graph_no = 0
 
-
-
 max_graphs = len(graph_ranges)
 list_o_graphs = list(graph_ranges.keys())
 all_graph_keys = set()
 for graph in list_o_graphs:
-    for key in graph_ranges[graph]["keys"]:
-        graph_ranges[graph][f"{key}_total"] = 0
-        all_graph_keys.add(key)
-    graph_ranges[graph]["readings_count"] = 0
-    graph_ranges[graph]["last reading"] = time.ticks_ms()
+    # for key in graph_ranges[graph]["keys"]:
+    #     graph_ranges[graph][f"{key}_total"] = 0
+    #     all_graph_keys.add(key)
+    # graph_ranges[graph]["readings_count"] = 0
+    # graph_ranges[graph]["last reading"] = time.ticks_ms()
     graph_ranges[graph]["changed"] = True
 
 # graph_updates = [True for x in range(len(list_o_graphs))]
@@ -559,12 +575,6 @@ log_updates = [True for x in range(len(list_o_logs))]
 display.set_pen(BLACK)
 display.clear()
 
-pre_free_mem = gc.mem_free()
-pre_alloc_mem = gc.mem_alloc()
-total_mem = pre_free_mem + pre_alloc_mem
-free()
-post_free_mem = gc.mem_free()
-
 print("Launching main loop now:\n")
 while True:
     tm_at_start = time.ticks_ms()
@@ -572,44 +582,6 @@ while True:
     default_temp, current_data = take_readings(thermometers, one_wire_sensor,
                                                got_bme280, got_bme69x,
                                                got_ds18t20, all_log_keys)
-    # current_data = {}
-    # # Take Sensor readings
-    # current_bme_temp = get_bme_temp()
-    # current_cpu_temp = get_cpu_temp()
-
-    # remote_temperatures = get_remote_temps(thermometers)
-
-    # default_temp = get_default_temp(current_bme_temp, current_cpu_temp,
-    #                                 remote_temperatures, one_wire_sensor,
-    #                                 got_bme280, got_bme69x, got_ds18t20)
-
-    # pre_free_mem = gc.mem_free()
-    # free()
-    # post_free_mem = gc.mem_free()
-
-    # for key in all_log_keys:
-    #     if key == "cpu temperature":
-    #         current_data[key] = current_cpu_temp
-    #     elif key == "bme temperature":
-    #         current_data[key] = current_bme_temp
-    #     elif (key == "PreCollect"):
-    #         current_data[key] = 100 - pre_free_mem / total_mem * 100
-    #     elif (key == "PostCollect"):
-    #         current_data[key] = 100 - post_free_mem / total_mem * 100
-    #     elif (key in one_wire_sensor):
-    #         try:
-    #             current_data[key] = remote_temperatures[one_wire_sensor[key]]
-    #         except(KeyError):
-    #             current_data[key] = None
-    #     else:
-    #         current_data[key] = default_temp
-    # #     try:
-    # #         Thing_t_print = f"{current_data[key]:02.2f}" if current_data[key] else f"{current_data[key]}"
-    # #     except:
-    # #         print(f"Couldnee turn {current_data[key]} into summat useful")
-    # #         Thing_t_print = "{current_data[key]}"
-    # #     print(f"{key} : {Thing_t_print} #", end=" ")
-    # # print("done")
 
     # Update the logs, and write out if required.
     for log in list_o_logs:
