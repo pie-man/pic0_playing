@@ -36,7 +36,7 @@ log_files = {
                       "buffer size" : 5, # Number of records to add between writes and truncating to max records
                       },
     # "Last hour bme" : {"log interval" : 30,
-    #                    "keys" : ["bme temperature"]
+    #                    "keys" : ["bme temperature"],
     #                    "max records" : 135, # Number of records to hold in memory (plus buffer size)
     #                    "buffer size" : 10, # Number of records to add between writes and truncating to max records
     #                    },
@@ -45,8 +45,13 @@ log_files = {
                            "max records" : 135, # Number of records to hold in memory (plus buffer size)
                            "buffer size" : 20, # Number of records to add between writes and truncating to max records
                            },
+    "12 hours" : {"log interval" : 360,
+                  "keys" : ["default", "back yard"],
+                  "max records" : 135, # Number of records to hold in memory (plus buffer size)
+                  "buffer size" : 3, # Number of records to add between writes and truncating to max records
+                  },
     # "12 hours" : {"log interval" : 360,
-    #               "keys" : ["default", "back yard"],
+    #               "keys" : ["bme temperature"],
     #               "max records" : 135, # Number of records to hold in memory (plus buffer size)
     #               "buffer size" : 3, # Number of records to add between writes and truncating to max records
     #               },
