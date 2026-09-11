@@ -169,7 +169,7 @@ def temperature_to_color(temp):
     ]
     return colour
 
-def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
+def plot_box_line(top_left, data_block, baseline, graph_scale, bar_width):
     first_guess = 0
     prev_t = data_block[first_guess]
     while prev_t is None and first_guess < len(data_block) -1:
@@ -336,8 +336,8 @@ def plot_graphs(collection_o_graphable_thingies):
         display.set_pen(COLOUR_PEN)
         display.text(f"{tick_val:02.1f}c_", 4, tick_line, scale = 2)
     for graphable_thingy in collection_o_graphable_thingies:
-        plot_line(plot_window, graphable_thingy, baseline, graph_scale, bar_width)
-        # plot_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
+        plot_box_line(plot_window, graphable_thingy, baseline, graph_scale, bar_width)
+        # plot_box_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
 
 def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     """Clears a rectangle to the background pen, and then writes some text, offset by margins in said
