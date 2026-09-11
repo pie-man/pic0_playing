@@ -305,8 +305,6 @@ def plot_graphs(collection_o_graphable_thingies):
             # print("")
             continue
         max_values.append(max(dave))
-        # max_values.append(graphable_thingy.get_max())
-        # min_values.append(graphable_thingy.get_min())
         min_values.append(min(dave))
         # print(f"Geein us a Max value O {max(dave)} an a Min value O {min(dave)}")
         # if len(dave) <=10 or min(dave) < 0.009 or max(dave) < 0.009:
@@ -559,26 +557,21 @@ for log_name in list_o_logs:
 readout_update = 1000 # m seconds
 
 update_count = 0
-change_over = 30
+change_over = 120
 current_graph_no = 0
 
 max_graphs = len(graph_ranges)
 list_o_graphs = list(graph_ranges.keys())
 all_graph_keys = set()
 for graph in list_o_graphs:
-    # for key in graph_ranges[graph]["keys"]:
-    #     graph_ranges[graph][f"{key}_total"] = 0
-    #     all_graph_keys.add(key)
-    # graph_ranges[graph]["readings_count"] = 0
-    # graph_ranges[graph]["last reading"] = time.ticks_ms()
     graph_ranges[graph]["changed"] = True
 
-# graph_updates = [True for x in range(len(list_o_graphs))]
-log_updates = [True for x in range(len(list_o_logs))]
 # Fills the screen with black
 display.set_pen(BLACK)
 display.clear()
 
+current_graph = graph_ranges[list_o_graphs[0]]
+title = list_o_graphs[current_graph_no]
 print("Launching main loop now:\n")
 while True:
     tm_at_start = time.ticks_ms()
@@ -591,42 +584,40 @@ while True:
     for log in list_o_logs:
         log_files = add_to_a_log(log, current_data, log_files)
 
-    for count, graph in enumerate(list_o_graphs):
-        if count == current_graph_no: # and current_graph["changed"]:
-            current_graph = graph_ranges[graph]
-            logs = current_graph["logs"]
-            # print(f"About to check these logs : {logs} for changes...")
-            for log in logs:
-                if log_files[log]["changed"]:
-                    # print(f"I see changed logs for graph {graph}. ..... oh and I see dead people.")
-                    current_graph["changed"] = True
-                    log_files[log]["changed"] = False
-            if not current_graph["changed"]:
-                continue
-            title = graph
-            write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
-            data_streams = []
-            for log in logs:
-                keys_required = set(current_graph["keys"]).intersection(set(log_files[log]["keys"]))
-                # print(f"For graph {title}, looking at log {log} with keys {log_files[log]["keys"]} - Picking {keys_required}")
-                for key in keys_required:
-                    data_streams.append(log_files[log]["log"].get_data(key))
-                    free()
-                plot_graphs(data_streams)
-            current_graph["changed"] = False
-
     update_count += 1
     if update_count >= change_over:
         current_graph_no += 1
         current_graph_no = current_graph_no % max_graphs
+        current_graph = graph_ranges[list_o_graphs[current_graph_no]]
+        title = list_o_graphs[current_graph_no]
         update_count = 0
         # print(f"Changing graph to display \"{list_o_graphs[current_graph_no]}\"")
         # fills the screen with black
         display.set_pen(BLACK)
         display.clear()
-        graph_ranges[list_o_graphs[current_graph_no]]["changed"] = True
+        current_graph["changed"] = True
 
-    # heck lets also set the LED to match
+    logs = current_graph["logs"]
+    # print(f"About to check these logs : {logs} for changes...")
+    # This checks the logs of the current graph, to see if they've been updated since it was last plotted.
+    for log in logs:
+        if log_files[log]["changed"]:
+            # print(f"I see changed logs for graph {graph}. ..... oh and I see dead people.")
+            current_graph["changed"] = True
+            log_files[log]["changed"] = False
+    if current_graph["changed"]:
+        write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
+        data_streams = []
+        for log in logs:
+            keys_required = set(current_graph["keys"]).intersection(set(log_files[log]["keys"]))
+            # print(f"For graph {title}, looking at log {log} with keys {log_files[log]["keys"]} - Picking {keys_required}")
+            for key in keys_required:
+                data_streams.append(log_files[log]["log"].get_data(key))
+                free()
+            plot_graphs(data_streams)
+        current_graph["changed"] = False
+
+    # Write the default temp to a box and heck lets also set the LED to match
     # But cut the brightness to about 5%. It really is very bright.
     if default_temp is not None:
         led_colour = [round(val * 0.05) for val in temperature_to_color(default_temp)]
@@ -635,9 +626,9 @@ while True:
         led_colour = [0,0,0]
         text = "No Temp"
     led.set_rgb(*led_colour)
-
     write_text_in_a_box(text, (0, 0), 100, 26, WHITE, BLACK)
 
+    # Update the 'clock' box
     clock = time.localtime()
     text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
     write_text_in_a_box(text, (200, 0), 120, 26, BLUE, BLACK)
