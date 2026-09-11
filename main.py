@@ -291,7 +291,7 @@ def plot_graphs(collection_o_graphable_thingies):
     max_values = []
     min_values = []
     max_data_length = -30
-    print(f"Gonna try plotting a graph wi {len(collection_o_graphable_thingies)} things awn it!")
+    # print(f"Gonna try plotting a graph wi {len(collection_o_graphable_thingies)} things awn it!")
     for graphable_thingy in collection_o_graphable_thingies:
         dave_count = 0
         dave = []
@@ -299,26 +299,30 @@ def plot_graphs(collection_o_graphable_thingies):
             if x is not None:
                 dave.append(x)
                 dave_count += 1
-        print(f"That yin had {dave_count} bits O useful data. ", end="")
+        # print(f"That yin had {dave_count} bits O useful data. ", end="")
         max_data_length = max(max_data_length, dave_count)
         if len(dave) == 0:
-            print("")
+            # print("")
             continue
         max_values.append(max(dave))
         # max_values.append(graphable_thingy.get_max())
         # min_values.append(graphable_thingy.get_min())
         min_values.append(min(dave))
-        print(f"Geein us a Max value O {max(dave)} an a Min value O {min(dave)}")
-        if len(dave) <=10 or min(dave) < 0.009 or max(dave) < 0.009:
-            print(dave)
+        # print(f"Geein us a Max value O {max(dave)} an a Min value O {min(dave)}")
+        # if len(dave) <=10 or min(dave) < 0.009 or max(dave) < 0.009:
+        #     print(dave)
     if len(max_values) == 0:
         write_text_in_a_box("No Data Found", (10,50), WIDTH - 20, HEIGHT - 100, BLUE, WHITE, scale=5)
-        print(f"Got nay Max Values to set a scale by. Bailin ooot.")
+        # print(f"Got nay Max Values to set a scale by. Bailin ooot.")
+        return
+    if max_data_length < 3:
+        write_text_in_a_box("Not Enough Data Found", (10,50), WIDTH - 20, HEIGHT - 100, BLUE, WHITE, scale=5)
+        # print(f"Nay got muny Values te plawt. Buggrin Orf Sharpish.")
         return
     max_value = max(max_values)
     min_value = min(min_values)
     graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
-    print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
+    # print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
     tick_marks = calc_tick_marks(graph_height, graph_scale)
     # clear the plotting rectangle here...
     # draws a white background for the text
@@ -372,15 +376,15 @@ def add_to_a_log(log_name, current_data, log_files_dict, force=False):
             # print(f"Adding a new record to log \"{log_name}\" @ {text}")
             new_record = {}
             new_record["timestamp"] = text
-            print(f"Current log is {current_log["log"].name} : ")
+            # print(f"Current log is {current_log["log"].name} : ")
             for key in current_log["keys"]:
                 if current_log[f"{key}_total"] is not None:
                     new_record[key] = current_log[f"{key}_total"] / current_log["readings_count"]
                 else:
                     new_record[key] = None
-                print(f"{key} : {new_record[key]}", end=" # ")
+                # print(f"{key} : {new_record[key]}", end=" # ")
                 current_log[f"{key}_total"] = None
-            print("..done\n")
+            # print("..done\n")
             current_log["log"].add_record(new_record)
             current_log["last reading"] = time.ticks_ms()
             current_log["readings_count"] = 0
@@ -594,7 +598,7 @@ while True:
             # print(f"About to check these logs : {logs} for changes...")
             for log in logs:
                 if log_files[log]["changed"]:
-                    print(f"I see changed logs for graph {graph}. ..... oh and I see dead people.")
+                    # print(f"I see changed logs for graph {graph}. ..... oh and I see dead people.")
                     current_graph["changed"] = True
                     log_files[log]["changed"] = False
             if not current_graph["changed"]:
