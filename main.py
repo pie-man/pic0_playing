@@ -8,12 +8,11 @@ from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
 from breakout_bme280 import BreakoutBME280
-from join_network import wifi_activate, wifi_select, wifi_login
 from info import wifi_creds2
 from local_config import hardware
-from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
 from logging_to_disc import Log_File
 import onewire, ds18x20, binascii
+from four_buttons import manual_set_time
 
 # set up the display and drawing constants
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -53,19 +52,24 @@ try:
 except(RuntimeError): # same again
     got_bme280 = False
 
+got_ds18t20 = False
 try:
     ds_pin = machine.Pin(0)
     ds_sensor = ds18x20.DS18X20(onewire.OneWire(ds_pin))
-    got_ds18t20 = True
     thermometers = ds_sensor.scan()
+    if len(thermometers) > 0:
+        print(f"Found {len(thermometers)} ds18b20 Thermometers")
+        got_ds18t20 = True
 except(RuntimeError): # same again
     got_ds18t20 = False
     thermometers = []
+    print(f"Error checking for One Wire Thermometers : setting got_ds18t20 to {got_ds18t20}")
 thermometer_names = {
      "mug" : "2865b3e9050000d8",
      "cup" : "287a10ea05000052",
      "air" : "28d9aa2c06000071",
-     "default" : "28d9aa2c06000071", # This one ("default") is used as a backup if no bme sensor is present.
+     "default" : "28d9aa2c06000071",
+     "back yard" : "28c12cfb050000bf",
 }
 bar_width = 2
 
@@ -88,17 +92,9 @@ temp_limits = [
 ]
 # temp_limits = sorted(temp_limits, key=temp_limits[0])
 
-def free(full=False):
-    # F = gc.mem_free()
-    # A = gc.mem_alloc()
-    # T = F + A
-    # print(f"Pre  Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
+def free():
     gc.collect()
-    # F = gc.mem_free()
-    # A = gc.mem_alloc()
-    # T = F + A
-    # print(f"Post Collect : Ram = {F:6d} bytes free, {A:6d} allocated ({100-F/T*100:02.1f}% used)")
-
+    
 def get_bme_readings():
     """Reads from either a bme69x or bme280 breakout.
     Returns a standised dictionary which the various
@@ -161,22 +157,21 @@ def get_cpu_temp():
     return temperature
 
 def get_remote_temps(ds18b20_thermometers):
-    """Requires a list of ds18b20 one-wire thermometers which were returned by
-    'ds18x20.DS18X20(onewire.OneWire(ds_pin)).scan()' earlier in the setup.
-    Converts each thermometer ID into ascii as a human readable / code accessible value.
-    Assembles a dictionary using those IDs as keys and the temperatures recorded as the values"""
-    ds_sensor.convert_temp()
-    time.sleep_ms(750) # Not sure why this is here, nor what it's value needs to be, but it came from the demo code and I sometimes got weird values, like "85" when I reduced it.
     temperatures = {}
-    for thermometer in ds18b20_thermometers:
-        thermometer_id_hex = binascii.hexlify(thermometer)
-        thermometer_id = thermometer_id_hex.decode('ascii')
-        try:
-            temperature = ds_sensor.read_temp(thermometer)
-        except:
-            temperature = None
-        # print(f"Read {thermometer_id} got a reading of {temperature}")
-        temperatures[thermometer_id] = temperature
+    if got_ds18t20:
+        ds_sensor.convert_temp()
+        time.sleep_ms(750)
+        for thermometer in ds18b20_thermometers:
+            thermometer_id_hex = binascii.hexlify(thermometer)
+            thermometer_id = thermometer_id_hex.decode('ascii')
+            try:
+                temperature = ds_sensor.read_temp(thermometer)
+            except:
+                temperature = None
+            # print(f"Read {thermometer_id} got a reading of {temperature}")
+            temperatures[thermometer_id] = temperature
+    else:
+        temperatures["default"] = get_bme_temp()
     return temperatures
 
 def temperature_to_color(temp):
@@ -204,19 +199,27 @@ def temperature_to_color(temp):
     return colour
 
 def plot_line(top_left, data_block, baseline, graph_scale, bar_width):
-    prev_t = data_block[0]
+    first_guess = 0
+    prev_t = data_block[first_guess]
+    while prev_t is None and first_guess < len(data_block) -1:
+        first_guess += 1
+        # print(f"looking at ppint {first_guess} in a list of {len(data_block)}")
+        prev_t = data_block[first_guess]
+    if prev_t is None:
+        return
     i = 0
-    for t in data_block[1:]:
-        rect_top, rect_thickness = ( 
-            calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
-                                  baseline, graph_scale)
-        )
-        colour_shade = calc_rectangle_colour(t, prev_t)
-        TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
-        display.set_pen(TEMPERATURE_COLOUR)
-        display.rectangle(i + top_left[0], rect_top + top_left[1], bar_width, rect_thickness)
+    for t in data_block[-135:]: # Needs to know how wide graph is - replace 135
+        if t:
+            rect_top, rect_thickness = ( 
+                calc_rectangle_coords(t, prev_t, GRAPH_HEIGHT,
+                                    baseline, graph_scale)
+            )
+            colour_shade = calc_rectangle_colour(t, prev_t)
+            TEMPERATURE_COLOUR = display.create_pen(*colour_shade)
+            display.set_pen(TEMPERATURE_COLOUR)
+            display.rectangle(i + top_left[0], rect_top + top_left[1], bar_width, rect_thickness)
+            prev_t = t
         i += bar_width
-        prev_t = t
 
 class data_buffer(object):
     """Originally conceived as a FIFO list to limit the size of gathered data
@@ -294,20 +297,10 @@ def calc_tick_marks(graph_height, graph_scale):
     # print(f"I think the temp range is {value_range}")
     max_tick_marks = graph_height // 30 # Where tF does (the original value of) 36 come from ? could it be twice text height plus a small margin ?
     # print(f"I think I can squeeze in {max_tick_marks} ticks")
-    tick_spacing = 0
-    while int(tick_spacing * 10) <= 0:
-        tick_spacing = value_range / max_tick_marks
-        max_tick_marks -= 1
-    # print(f"tick marks every {tick_spacing} units")
+    tick_spacing = value_range / max_tick_marks
     upper_limit = int(value_range *10)
-    int_tick_spacing = int(tick_spacing * 10)
-    if upper_limit < 0 or upper_limit <= int_tick_spacing or int_tick_spacing <= 0:
-        print(f"Call Batman - trying to generate a range from 0 to {upper_limit} with an interval of {int_tick_spacing}")
-        if int_tick_spacing <= 0:
-            int_tick_spacing = 1
-        if upper_limit < (int_tick_spacing * 2):
-            upper_limit = int_tick_spacing * 2.0
-        print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
+    int_tick_spacing = max(1, int(tick_spacing * 10))  # ended up moiving the max here - it IS needed.
+    # print(f"got upper limit of {upper_limit}, and spacing of {int_tick_spacing}")
     tick_marks = [x/10 for x in range(0, upper_limit, int_tick_spacing)]
     # print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
@@ -327,12 +320,20 @@ def plot_graphs(collection_o_graphable_thingies):
     max_values = []
     min_values = []
     for graphable_thingy in collection_o_graphable_thingies:
-        if len(graphable_thingy) == 0:
-            return
-        max_values.append(max(graphable_thingy))
+        dave_count = 0
+        dave = []
+        for x in  graphable_thingy:
+            if x is not None:
+                dave.append(x)
+                dave_count += 1
+        if len(dave) == 0:
+            continue
+        max_values.append(max(dave))
         # max_values.append(graphable_thingy.get_max())
         # min_values.append(graphable_thingy.get_min())
-        min_values.append(min(graphable_thingy))
+        min_values.append(min(dave))
+    if len(max_values) == 0:
+        return
     max_value = max(max_values)
     min_value = min(min_values)
     graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
@@ -370,64 +371,70 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
 
 # set the time..
-try:
-    print("Activating WiFi :")
+if hardware["WiFi"]:
+    try:
+        from set_time_by_ntp import set_time, is_it_daylight_saving_time, one_am_on_last_sunday_of_the_month
+        from join_network import wifi_activate, wifi_select, wifi_login
+        print("Activating WiFi :")
+        top_left = [10, 10]
+        write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
+        display.update()
+        top_left[1] += 30
+        wlan = wifi_activate()
+        time.sleep(1)
+        print("Getting list of known networks")
+        write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        top_left[1] += 20
+        known_networks = wifi_creds2()
+        time.sleep(1)
+        print("Selecting and joining...")
+        write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        top_left[1] += 20
+        ssid = wifi_select(wlan, known_networks)
+        time.sleep(1)
+        print(f"Joining Network {ssid}.")
+        write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        top_left[1] += 20
+        wifi_login(ssid, known_networks[ssid], wlan)
+        time.sleep(1)
+        print("Setting time.")
+        write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
+        display.update()
+        top_left[1] += 30
+        time_val = set_time()
+        write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
+        top_left[1] += 30
+        write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+        top_left[1] += 20
+        write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
+        display.update()
+        print("here's that line")
+        time.sleep(10)
+        top_left[1] = 10
+        if is_it_daylight_saving_time(time_val):
+            time_val += 3600
+            print("I think it's time to save daylight")
+            write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
+        else:
+            write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
+        print("Here's that other line")
+        time.sleep(5)
+        tm = time.gmtime(time_val)
+        machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+        time.sleep(1)
+    except: # Need better exception handling here, but then network stuff needs that too.
+        machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
+        print("An error has occurred in Setup")
+        write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
+        display.update()
+        time.sleep(10)
+else:
+    manual_set_time(display)
     top_left = [10, 10]
-    write_text_in_a_box("Activating WiFi :", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    top_left[1] += 30
-    wlan = wifi_activate()
-    time.sleep(1)
-    print("Getting list of known networks")
-    write_text_in_a_box("Getting list of known networks:", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    known_networks = wifi_creds2()
-    time.sleep(1)
-    print("Selecting and joining...")
-    write_text_in_a_box("Selecting and joining...", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    ssid = wifi_select(wlan, known_networks)
-    # ssid = "Rhaggy ?"
-    time.sleep(1)
-    print(f"Joining Network {ssid}.")
-    write_text_in_a_box(f"Joining Network {ssid}.", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    top_left[1] += 20
-    wifi_login(ssid, known_networks[ssid], wlan)
-    time.sleep(1)
-    print("Setting time.")
-    write_text_in_a_box("Setting time.", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    top_left[1] += 30
-    time_val = set_time()
-    write_text_in_a_box(f"T val = {time_val}", top_left, 310, 30, BLACK, BLUE, 3)
-    top_left[1] += 30
-    write_text_in_a_box(f"BST Start = {one_am_on_last_sunday_of_the_month(3, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
-    top_left[1] += 20
-    write_text_in_a_box(f"BST End = {one_am_on_last_sunday_of_the_month(10, time_val)}", top_left, 310, 30, BLACK, BLUE, 2)
-    display.update()
-    print("here's that line")
-    time.sleep(10)
-    top_left[1] = 10
-    if is_it_daylight_saving_time(time_val):
-        time_val += 3600
-        print("I think it's time to save daylight")
-        write_text_in_a_box("Daylight Saving ON", [10,70], 310, 30, BLACK, BLUE, 3)
-    else:
-        write_text_in_a_box("Daylight Saving OFF", [10,70], 310, 30, BLUE, BLACK, 3)
-    print("Here's that other line")
-    time.sleep(5)
-    tm = time.gmtime(time_val)
-    machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
-    time.sleep(1)
-except: # Need better exception handling here, but then network stuff needs that too.
-    machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
-    print("An error has occurred in Setup")
-    write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
-    display.update()
-    time.sleep(10)
+
 clock = time.localtime()
 text = f"{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
 # print(f"{text}")
@@ -459,7 +466,7 @@ graph_ranges = {
     "12 hours" : {"plot interval" : 360,
                   "marker scale" : "hours",
                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
-                  "keys" : ["mug", "cup", "air"],
+                  "keys" : ["bme temperature", "mug", "cup", "air"],
                   "log" : None,
                   },
     "Ram Usage" : {"plot interval" : 120,
@@ -544,8 +551,11 @@ while True:
             current_data[key] = current_bme_pressure
         elif (key == "rel_humidity"):
             current_data[key] = current_bme_humidity
-        elif (key == "mug" or key == "cup" or key == "air"):
-            current_data[key] = remote_temperatures[thermometer_names[key]]
+        elif (key == "mug" or key == "cup" or key == "air" or key == "back yard"):
+            try:
+                current_data[key] = remote_temperatures[thermometer_names[key]]
+            except(KeyError):
+                current_data[key] = None
         elif (key == "PreCollect"):
             current_data[key] = 100 - pre_free_mem / total_mem * 100
         elif (key == "PostCollect"):
@@ -579,7 +589,7 @@ while True:
             if graph == "24 hours":
                 plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cpu temperature")])
             elif graph == "12 hours":
-                plot_graphs([graph_ranges[graph]["log"].get_data("mug"), graph_ranges[graph]["log"].get_data("cup"), graph_ranges[graph]["log"].get_data("air")])
+                plot_graphs([graph_ranges[graph]["log"].get_data("bme temperature"), graph_ranges[graph]["log"].get_data("cup"), graph_ranges[graph]["log"].get_data("air"), graph_ranges[graph]["log"].get_data("mug")])
             elif graph == "Ram Usage":
                 plot_graphs([graph_ranges[graph]["log"].get_data("PreCollect"), graph_ranges[graph]["log"].get_data("PostCollect")])
             else:
