@@ -104,6 +104,9 @@ def get_bme_readings():
     bme_readings["meas_index"] = None
     if got_bme69x:
         readings = bme69x.read()
+        bme_readings["temperature"] = readings[0]
+        bme_readings["pressure"] = readings[1]
+        bme_readings["humidity"] = readings[2]
         bme_readings["gas_resistance"] = readings[3]
         bme_readings["status"] = readings[4]
         bme_readings["gas_index"] = readings[5]
@@ -441,7 +444,11 @@ def take_readings(thermometers, one_wire_sensor,
     current_data["time_of_readings"] = time.ticks_ms()
 
     # Take Sensor readings
-    current_bme_temp = get_bme_temp()
+    bme_readings = get_bme_readings()
+    # print(f"BME readings are : {bme_readings}")
+    current_bme_temp = get_bme_temp(bme_readings)
+    current_bme_pressure = get_bme_pressure(bme_readings)
+    current_bme_humidity = get_bme_humiditiy(bme_readings)
     current_cpu_temp = get_cpu_temp()
 
     remote_temperatures = get_remote_temps(thermometers)
@@ -459,6 +466,10 @@ def take_readings(thermometers, one_wire_sensor,
             current_data[key] = current_cpu_temp
         elif key == "bme temperature":
             current_data[key] = current_bme_temp
+        elif key == "pressure":
+            current_data[key] = current_bme_pressure
+        elif key == "humidity":
+            current_data[key] = current_bme_humidity
         elif (key == "PreCollect"):
             current_data[key] = 100 - pre_free_mem / total_mem * 100
         elif (key == "PostCollect"):
@@ -571,6 +582,7 @@ time.sleep(5)
 
 # Set up (expand) the dictionary tracking all the log files
 list_o_logs = list(log_files.keys())
+# print(f"List O Logs is {list_o_logs}")
 all_log_keys = set()
 for log_name in list_o_logs:
     log_file_name = f"{log_name.replace(" ", "_")}.txt"
@@ -647,7 +659,7 @@ while True:
     # This checks the logs of the current graph, to see if they've been updated since it was last plotted.
     for log in logs:
         if log_files[log]["changed"]:
-            # print(f"I see changed logs for graph {graph}. ..... oh and I see dead people.")
+            # print(f"I see changed logs for graph {title}. ..... oh and I see dead people.")
             current_graph["changed"] = True
             log_files[log]["changed"] = False
     if current_graph["changed"]:
