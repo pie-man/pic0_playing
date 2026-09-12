@@ -16,9 +16,72 @@ hardware = {
 
 # matching 1 wire sensor unique IDs to human sensible values
 one_wire_sensor = {
-    "thermometer_names" : {
      "mug" : "28b9fefa050000d4",
-     "cup" : "28e81dfb050000d6",
-     "air" : "28828beb050000c9",
-    },
+     "air" : "28e81dfb050000d6",
+     "cup" : "28828beb050000c9",
+     "back yard" : "28c12cfb050000bf",
+     "default" : "28e81dfb050000d6",
 }
+
+# Logs to create :
+log_files = {
+    # "24 hours bme" : {"log interval" : 720,
+    #                   "keys" : ["bme temperature"],
+    #                   "max records" : 135, # Number of records to hold in memory (plus buffer size)
+    #                   "buffer size" : 1, # Number of records to add between writes and truncating to max records
+    #                   },
+    "24 hours ds18b20" : {"log interval" : 720,
+                      "keys" : ["default", "back yard"],
+                      "max records" : 135, # Number of records to hold in memory (plus buffer size)
+                      "buffer size" : 5, # Number of records to add between writes and truncating to max records
+                      },
+    # "Last hour bme" : {"log interval" : 30,
+    #                    "keys" : ["bme temperature"],
+    #                    "max records" : 135, # Number of records to hold in memory (plus buffer size)
+    #                    "buffer size" : 10, # Number of records to add between writes and truncating to max records
+    #                    },
+    "Last hour ds18b20" : {"log interval" : 30,
+                           "keys" : ["default", "mug", "cup", "back yard"],
+                           "max records" : 135, # Number of records to hold in memory (plus buffer size)
+                           "buffer size" : 20, # Number of records to add between writes and truncating to max records
+                           },
+    "12 hours" : {"log interval" : 360,
+                  "keys" : ["default", "back yard"],
+                  "max records" : 135, # Number of records to hold in memory (plus buffer size)
+                  "buffer size" : 3, # Number of records to add between writes and truncating to max records
+                  },
+    # "12 hours" : {"log interval" : 360,
+    #               "keys" : ["bme temperature"],
+    #               "max records" : 135, # Number of records to hold in memory (plus buffer size)
+    #               "buffer size" : 3, # Number of records to add between writes and truncating to max records
+    #               },
+    "Ram Usage" : {"log interval" : 120,
+                   "keys" : ["PreCollect", "PostCollect"],
+                   "max records" : 135, # Number of records to hold in memory (plus buffer size)
+                   "buffer size" : 10, # Number of records to add between writes and truncating to max records
+                   },
+    }
+
+# Graphs to plot :
+graph_ranges = {
+    "24 hours" : {"marker scale" : "hours",
+                  "markers" : [0, 6, 12, 18],
+                  "keys" : ["default", "back yard"],
+                  "logs" : ["24 hours ds18b20"],
+                  },
+    "Last hour" : {"marker scale" : "mins",
+                   "markers" : [0, 15, 30, 45],
+                   "keys" : ["default", "mug", "cup", "back yard"],
+                   "logs" : ["Last hour ds18b20"],
+                  },
+    # "12 hours" : {"marker scale" : "hours",
+    #               "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
+    #               "keys" : ["default", "mug", "cup", "back yard"],
+    #               "logs" : ["12 hours"],
+    #               },
+    "Ram Usage" : {"marker scale" : "mins",
+                   "markers" : [0, 15, 30, 45],
+                   "keys" : ["PreCollect", "PostCollect"],
+                   "logs" : ["Ram Usage"],
+                   },
+    }
