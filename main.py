@@ -105,7 +105,7 @@ def get_bme_readings():
     if got_bme69x:
         readings = bme69x.read()
         bme_readings["temperature"] = readings[0]
-        bme_readings["pressure"] = readings[1]
+        bme_readings["pressure"] = readings[1]/100 # convert to hPa
         bme_readings["humidity"] = readings[2]
         bme_readings["gas_resistance"] = readings[3]
         bme_readings["status"] = readings[4]
@@ -114,7 +114,7 @@ def get_bme_readings():
     elif got_bme280:
         readings = bme280.read()
         bme_readings["temperature"] = readings[0]
-        bme_readings["pressure"] = readings[1]
+        bme_readings["pressure"] = readings[1]/100
         bme_readings["humidity"] = readings[2]
     else:
         bme_readings["temperature"] = None
@@ -324,7 +324,7 @@ def calc_tick_marks(graph_height, graph_scale):
     # print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
 
-def plot_graphs(collection_o_graphable_thingies):
+def plot_graphs(collection_o_graphable_thingies, units=None):
     """Oooh, too many issues to list here...
     Needs making into a routine where it's given the location of it's TLC, width and height.
     It should handle clearing the axes (of which an X one still needs adding) and the plot area.
@@ -382,7 +382,9 @@ def plot_graphs(collection_o_graphable_thingies):
         colour = temperature_to_color(tick_val)
         COLOUR_PEN = display.create_pen(*colour)
         display.set_pen(COLOUR_PEN)
-        display.text(f"{tick_val:02.1f}c_", 4, tick_line, scale = 2)
+        if units is None:
+            units = "c"
+        display.text(f"{tick_val:02.1f}{units}_", 4, tick_line, scale = 2)
     for graphable_thingy in collection_o_graphable_thingies:
         plot_box_line(plot_window, graphable_thingy, baseline, graph_scale, bar_width)
         # plot_box_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
@@ -545,6 +547,8 @@ if hardware["WiFi"]:
         tm = time.gmtime(time_val)
         machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
         time.sleep(1)
+    except(KeyboardInterrupt):
+        raise
     except: # Need better exception handling here, but then network stuff needs that too.
         machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
         print("An error has occurred in Setup")
@@ -671,7 +675,11 @@ while True:
             for key in keys_required:
                 data_streams.append(log_files[log]["log"].get_data(key))
                 free()
-            plot_graphs(data_streams)
+        if "units" in current_graph:
+            units = current_graph["units"]
+        else:
+            units = "c"
+        plot_graphs(data_streams, units)
         current_graph["changed"] = False
 
     # Write the default temp to a box and heck lets also set the LED to match
