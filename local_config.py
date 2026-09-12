@@ -20,13 +20,16 @@ one_wire_sensor = {
      "air" : "28e81dfb050000d6",
      "cup" : "28828beb050000c9",
      "back yard" : "28c12cfb050000bf",
+     "a" : "2865b3e9050000d8",
+     "b" : "287a10ea05000052",
+     "c" : "28d9aa2c06000071",
      "default" : "28e81dfb050000d6",
 }
 
 # Logs to create :
 log_files = {
     # "24 hours bme" : {"log interval" : 720,
-    #                   "keys" : ["bme temperature"],
+    #                   "keys" : ["bme temperature", "pressure", "humidity"],
     #                   "max records" : 135, # Number of records to hold in memory (plus buffer size)
     #                   "buffer size" : 1, # Number of records to add between writes and truncating to max records
     #                   },
@@ -35,8 +38,18 @@ log_files = {
                       "max records" : 135, # Number of records to hold in memory (plus buffer size)
                       "buffer size" : 5, # Number of records to add between writes and truncating to max records
                       },
+    # "12 hours bme" : {"log interval" : 360,
+    #                   "keys" : ["bme temperature", "pressure", "humidity"],
+    #                   "max records" : 135, # Number of records to hold in memory (plus buffer size)
+    #                   "buffer size" : 3, # Number of records to add between writes and truncating to max records
+    #                   },
+    "12 hours ds18b20" : {"log interval" : 360,
+                          "keys" : ["default", "back yard"],
+                          "max records" : 135, # Number of records to hold in memory (plus buffer size)
+                          "buffer size" : 3, # Number of records to add between writes and truncating to max records
+                          },
     # "Last hour bme" : {"log interval" : 30,
-    #                    "keys" : ["bme temperature"],
+    #                    "keys" : ["bme temperature", "pressure", "humidity"],
     #                    "max records" : 135, # Number of records to hold in memory (plus buffer size)
     #                    "buffer size" : 10, # Number of records to add between writes and truncating to max records
     #                    },
@@ -45,16 +58,6 @@ log_files = {
                            "max records" : 135, # Number of records to hold in memory (plus buffer size)
                            "buffer size" : 20, # Number of records to add between writes and truncating to max records
                            },
-    "12 hours" : {"log interval" : 360,
-                  "keys" : ["default", "back yard"],
-                  "max records" : 135, # Number of records to hold in memory (plus buffer size)
-                  "buffer size" : 3, # Number of records to add between writes and truncating to max records
-                  },
-    # "12 hours" : {"log interval" : 360,
-    #               "keys" : ["bme temperature"],
-    #               "max records" : 135, # Number of records to hold in memory (plus buffer size)
-    #               "buffer size" : 3, # Number of records to add between writes and truncating to max records
-    #               },
     "Ram Usage" : {"log interval" : 120,
                    "keys" : ["PreCollect", "PostCollect"],
                    "max records" : 135, # Number of records to hold in memory (plus buffer size)
@@ -65,21 +68,49 @@ log_files = {
 # Graphs to plot :
 graph_ranges = {
     "24 hours" : {"marker scale" : "hours",
+                  "units" : "c",
                   "markers" : [0, 6, 12, 18],
                   "keys" : ["default", "back yard"],
                   "logs" : ["24 hours ds18b20"],
                   },
+    # "Big Dave" : {"marker scale" : "hours",
+    #               "units" : "mb",
+    #               "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
+    #               "keys" : ["pressure"],
+    #               "logs" : ["24 hours bme"],
+    #               },
+    # "12H Pressure" : {"marker scale" : "hours",
+    #                   "units" : "hPa",
+    #                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
+    #                   "keys" : ["pressure"],
+    #                   "logs" : ["12 hours bme"],
+    #                   },
+    # "12H Temp" : {"marker scale" : "hours",
+    #                   "units" : "c",
+    #                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
+    #                   "keys" : ["bme temperature"],
+    #                   "logs" : ["12 hours bme"],
+    #                   },
+    # "12H Humidity" : {"marker scale" : "hours",
+    #                   "units" : "%",
+    #                   "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
+    #                   "keys" : ["humidity"],
+    #                   "logs" : ["12 hours bme"],
+    #                   },
+    "12 hours" : {"marker scale" : "hours",
+                  "units" : "C",
+                  "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
+                  "keys" : ["default", "mug", "cup", "back yard"],
+                  "logs" : ["12 hours ds18b20"],
+                  },
     "Last hour" : {"marker scale" : "mins",
+                   "units" : "C",
                    "markers" : [0, 15, 30, 45],
                    "keys" : ["default", "mug", "cup", "back yard"],
                    "logs" : ["Last hour ds18b20"],
                   },
-    # "12 hours" : {"marker scale" : "hours",
-    #               "markers" : [0, 3, 6, 9, 12, 15, 18, 21],
-    #               "keys" : ["default", "mug", "cup", "back yard"],
-    #               "logs" : ["12 hours"],
-    #               },
     "Ram Usage" : {"marker scale" : "mins",
+                   "units" : "%",
                    "markers" : [0, 15, 30, 45],
                    "keys" : ["PreCollect", "PostCollect"],
                    "logs" : ["Ram Usage"],
