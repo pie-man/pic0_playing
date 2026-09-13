@@ -92,20 +92,68 @@ temp_limits = [
 
 def free():
     gc.collect()
-
-def get_bme_temp():
+    
+def get_bme_readings():
+    """Reads from either a bme69x or bme280 breakout.
+    Returns a standised dictionary which the various
+    get_bme_<reading type> routines will return as individual values - seemed like a good idea at the time."""
+    bme_readings = {}
+    bme_readings["gas_resistance"] = None
+    bme_readings["status"] = None
+    bme_readings["gas_index"] = None
+    bme_readings["meas_index"] = None
     if got_bme69x:
         readings = bme69x.read()
-        temperature = readings[0]
+        bme_readings["temperature"] = readings[0]
+        bme_readings["pressure"] = readings[1]/100 # convert to hPa
+        bme_readings["humidity"] = readings[2]
+        bme_readings["gas_resistance"] = readings[3]
+        bme_readings["status"] = readings[4]
+        bme_readings["gas_index"] = readings[5]
+        bme_readings["meas_index"] = readings[6]
     elif got_bme280:
         readings = bme280.read()
-        # readings[1] anmd readings[2] are pressure and rel. humidity respectively.
-        temperature = readings[0]
+        bme_readings["temperature"] = readings[0]
+        bme_readings["pressure"] = readings[1]/100
+        bme_readings["humidity"] = readings[2]
     else:
-        temperature = None
-    return temperature
+        bme_readings["temperature"] = None
+        bme_readings["pressure"] = None
+        bme_readings["humidity"] = None
+    return bme_readings
+
+def get_bme_temp(readings: dict={}) -> float:
+    """takes readings from either a bme69x or bme280 breakout.
+    The intention was to allow the breakout to be read once and essentially provide
+    standardised functions for the different readings.
+    If no set of readings is provided, calls the get_bme_readings routine for the user.
+    This one returns temperature....."""
+    if not readings:
+        readings = get_bme_readings()
+    return readings["temperature"]
+
+def get_bme_pressure(readings: dict={}) -> float:
+    """takes readings from either a bme69x or bme280 breakout.
+    The intention was to allow the breakout to be read once and essentially provide
+    standardised functions for the different readings.
+    If no set of readings is provided, calls the get_bme_readings routine for the user.
+    This one returns pressure....."""
+    if not readings:
+        readings = get_bme_readings()
+    return readings["pressure"]
+
+def get_bme_humiditiy(readings: dict={}) -> float:
+    """takes readings from either a bme69x or bme280 breakout.
+    The intention was to allow the breakout to be read once and essentially provide
+    standardised functions for the different readings.
+    If no set of readings is provided, calls the get_bme_readings routine for the user.
+    This one returns humidity....."""
+    if not readings:
+        readings = get_bme_readings()
+    return readings["humidity"]
 
 def get_cpu_temp():
+    """Can't recall which demo this bit of code came from, nor what the various numbers do/represent."""
     reading = sensor_temp.read_u16() * conversion_factor
     temperature = 27 - (reading - 0.706) / 0.001721
     return temperature
@@ -276,7 +324,7 @@ def calc_tick_marks(graph_height, graph_scale):
     # print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
 
-def plot_graphs(collection_o_graphable_thingies):
+def plot_graphs(collection_o_graphable_thingies, units=None):
     """Oooh, too many issues to list here...
     Needs making into a routine where it's given the location of it's TLC, width and height.
     It should handle clearing the axes (of which an X one still needs adding) and the plot area.
@@ -334,7 +382,9 @@ def plot_graphs(collection_o_graphable_thingies):
         colour = temperature_to_color(tick_val)
         COLOUR_PEN = display.create_pen(*colour)
         display.set_pen(COLOUR_PEN)
-        display.text(f"{tick_val:02.1f}c_", 4, tick_line, scale = 2)
+        if units is None:
+            units = "c"
+        display.text(f"{tick_val:02.1f}{units}_", 4, tick_line, scale = 2)
     for graphable_thingy in collection_o_graphable_thingies:
         plot_box_line(plot_window, graphable_thingy, baseline, graph_scale, bar_width)
         # plot_box_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
@@ -396,7 +446,11 @@ def take_readings(thermometers, one_wire_sensor,
     current_data["time_of_readings"] = time.ticks_ms()
 
     # Take Sensor readings
-    current_bme_temp = get_bme_temp()
+    bme_readings = get_bme_readings()
+    # print(f"BME readings are : {bme_readings}")
+    current_bme_temp = get_bme_temp(bme_readings)
+    current_bme_pressure = get_bme_pressure(bme_readings)
+    current_bme_humidity = get_bme_humiditiy(bme_readings)
     current_cpu_temp = get_cpu_temp()
 
     remote_temperatures = get_remote_temps(thermometers)
@@ -414,6 +468,10 @@ def take_readings(thermometers, one_wire_sensor,
             current_data[key] = current_cpu_temp
         elif key == "bme temperature":
             current_data[key] = current_bme_temp
+        elif key == "pressure":
+            current_data[key] = current_bme_pressure
+        elif key == "humidity":
+            current_data[key] = current_bme_humidity
         elif (key == "PreCollect"):
             current_data[key] = 100 - pre_free_mem / total_mem * 100
         elif (key == "PostCollect"):
@@ -489,6 +547,8 @@ if hardware["WiFi"]:
         tm = time.gmtime(time_val)
         machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
         time.sleep(1)
+    except(KeyboardInterrupt):
+        raise
     except: # Need better exception handling here, but then network stuff needs that too.
         machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
         print("An error has occurred in Setup")
@@ -526,6 +586,7 @@ time.sleep(5)
 
 # Set up (expand) the dictionary tracking all the log files
 list_o_logs = list(log_files.keys())
+# print(f"List O Logs is {list_o_logs}")
 all_log_keys = set()
 for log_name in list_o_logs:
     log_file_name = f"{log_name.replace(" ", "_")}.txt"
@@ -602,7 +663,7 @@ while True:
     # This checks the logs of the current graph, to see if they've been updated since it was last plotted.
     for log in logs:
         if log_files[log]["changed"]:
-            # print(f"I see changed logs for graph {graph}. ..... oh and I see dead people.")
+            # print(f"I see changed logs for graph {title}. ..... oh and I see dead people.")
             current_graph["changed"] = True
             log_files[log]["changed"] = False
     if current_graph["changed"]:
@@ -614,7 +675,11 @@ while True:
             for key in keys_required:
                 data_streams.append(log_files[log]["log"].get_data(key))
                 free()
-            plot_graphs(data_streams)
+        if "units" in current_graph:
+            units = current_graph["units"]
+        else:
+            units = "c"
+        plot_graphs(data_streams, units)
         current_graph["changed"] = False
 
     # Write the default temp to a box and heck lets also set the LED to match
