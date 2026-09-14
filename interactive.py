@@ -13,6 +13,7 @@ print(f"Width of screen is {WIDTH}")
 BLACK = display.create_pen(0, 0, 0)
 WHITE = display.create_pen(255, 255, 255)
 BLUE = display.create_pen(100, 100, 200)
+RED = display.create_pen(200, 50, 50)
 MAGENTA = display.create_pen(200, 100, 200)
 
 try:
@@ -90,3 +91,150 @@ for count, record in enumerate(log_2.data):
     print("@")
 
 log_2.write_data()
+
+fh = open("12_hours_bme.txt","r")
+fh_out = open ("edited.txt","w")
+first_line = fh.readline()
+fh_out.write(first_line)
+for line in fh:
+        data_vals = line.rstrip().split(",")
+        timestamp = data_vals[0]
+        records = data_vals[1:]
+        fixed_pressure = float(records[1])/100
+        print(f"fixed pressure is {fixed_pressure}")
+        data_vals = [timestamp]
+        data_vals.extend([records[0], f"{fixed_pressure:04.1f}", records[2]])
+        fh_out.write( f"{','.join(data_vals)}\n" )
+fh.close()
+fh_out.close()
+
+thickness = 5
+for shift in range(11):
+    h_shift = round((320/12) * shift)
+    v_shift = round((240/12) * shift)
+    thickness = round(shift / 2.0) + 1
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_clip(h_shift, v_shift, WIDTH - 2* h_shift, HEIGHT - 2* v_shift)
+    for count, colour in enumerate(colours):
+        border = count*30 + 10
+        tl = [border + h_shift, border]
+        tr = [WIDTH - border, border + v_shift]
+        bl = [border, HEIGHT - (border + v_shift)]
+        br = [WIDTH - (border + h_shift), HEIGHT - border]
+        display.set_pen(colour)
+        display.line(*tl, *tr, thickness)
+        display.line(*tr, *br, thickness)
+        display.line(*br, *bl, thickness)
+        display.line(*bl, *tl, thickness)
+        display.update()
+        time.sleep(0.5)
+    display.remove_clip()
+
+
+record = ["2026/09/12@03:08:36","18.52251","19.03584","18.50207","18.52547"]
+timestring = record[0]
+def timestamp_to_seconds(timestamp):
+    date, clock = timestamp.split("@")
+    yy, mm, dd = date.split("/")
+    year = int(yy)
+    month = int(mm)
+    day = int(dd)
+    hh, MM, ss = clock.split(":")
+    hour = int(hh)
+    min = int(MM)
+    sec = int(ss)
+    return time.mktime((year, month, day, hour, min, sec, 0, 0))
+
+data_block=[]
+with open("/12_hours_ds18b20.txt", "r") as fh:
+            print("open..")
+            keys_as_text = fh.readline().strip()
+            print(f"read keys as : {keys_as_text}")
+            file_keys = keys_as_text.split(",")
+            data_read = 0
+            for line in fh:
+                data_vals = line.rstrip().split(",")
+                print(f"Data vals point 1 = {data_vals}")
+                timestamp = timestamp_to_seconds(data_vals[0]) if data_vals[0] !="no record" else None
+                records = [float(x) if x !="no record" else None for x in data_vals[1:]]
+                print(f"data_vals[1:] = {data_vals[1:]}")
+                print(f"records = {records}")
+                data_vals = [timestamp]
+                data_vals.extend(records)
+                data_block.append(data_vals)
+
+
+def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
+               min_value, value_range, x_start_value, x_range,
+               data_block, data_pairs):
+    for plot_pair in data_pairs:
+        x_column = plot_pair[0]
+        y_column = plot_pair[1]
+        if len(plot_pair) > 2:
+             display.set_pen(plot_pair[2])
+        # duration_in_s = data_block[-1][x_column] - data_block[0][x_column]
+        pixels_per_unit = plot_width / x_range
+        vertical_scale = value_range / plot_height
+        # pixels_per_reading = pixels_per_unit * 720 # 12 hours of data, a reading every 6 mins
+        previous_y_value = data_block[0][y_column]
+        previous_x_value = data_block[0][x_column]
+        for readings in data_block[1:]:
+            x_value = readings[x_column]
+            x_coord_old = top_left_x + round((previous_x_value - x_start_value) * pixels_per_unit)
+            y_coord_old = top_left_y + round(plot_height - ((previous_y_value - min_value) / vertical_scale))
+            x_coord_new = top_left_x + round((x_value - x_start_value) * pixels_per_unit)
+            y_coord_new = top_left_y + round(plot_height - ((readings[y_column] - min_value ) / vertical_scale))
+            # print(f"{readings[y_column]} c at a height of {y_coord_new} pixels")
+            display.line(x_coord_old, y_coord_old, x_coord_new, y_coord_new, 2)
+            previous_y_value = readings[y_column]
+            previous_x_value = x_value
+        display.update()
+        time.sleep(0.05)
+
+display.set_pen(BLACK)
+display.clear()
+display.set_pen(MAGENTA)
+plot_graph(0, 0, WIDTH, HEIGHT,
+           21, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, [(0,1)])
+display.set_pen(BLUE)
+plot_graph(0, 120, WIDTH, 120,
+           21, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, [(0,1)])
+display.set_pen(WHITE)
+plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT,
+           21, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, [(0,1, RED)])
+display.set_pen(WHITE)
+plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
+           21, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, [(0,1, WHITE)])
+
+display.set_pen(BLACK)
+display.clear()
+plotables = [
+     (0,1, WHITE),
+     (0,2, RED),
+     (0,3, MAGENTA),
+]
+plot_graph(WIDTH//2, HEIGHT//2, WIDTH//2, HEIGHT//2,
+           20, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, plotables)
+plot_graph(0, 0, WIDTH//2, HEIGHT//2,
+           20, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, plotables)
+plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
+           20, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, plotables)
+plot_graph(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
+           20, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, plotables)
