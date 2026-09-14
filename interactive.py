@@ -148,6 +148,7 @@ def timestamp_to_seconds(timestamp):
     return time.mktime((year, month, day, hour, min, sec, 0, 0))
 
 data_block=[]
+file_keys = []
 with open("/12_hours_ds18b20.txt", "r") as fh:
             print("open..")
             keys_as_text = fh.readline().strip()
@@ -165,6 +166,16 @@ with open("/12_hours_ds18b20.txt", "r") as fh:
                 data_vals.extend(records)
                 data_block.append(data_vals)
 
+with open("/new_style_file.txt", "w") as fh_out:
+    description_text = ",".join(file_keys) + "\n"
+    fh_out.write(f"{description_text}")
+    for record in data_block:
+        timestamp = f"{record[0]}"
+        record_as_text = [f"{x:.2f}" if x else "no record" for x in record[1:]]
+        print(f"record_as_text = {record_as_text}")
+        new_record = [timestamp]
+        new_record.extend(record_as_text)
+        fh_out.write(f"{",".join(new_record)}\n")
 
 def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
                min_value, value_range, x_start_value, x_range,
@@ -184,13 +195,15 @@ def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
     as the background... doh.
     """
     # Clears the rectangle we're going to plot into with a BLACK background
-    display.set_pen(BLACK)
+    display.set_pen(BLACK) # should a background colour be an argument ?
+    # If so, should a default line/pen colour also be set ?
     display.rectangle(top_left_x, top_left_y, plot_width, plot_height)
     display.update()
     # Sets a boundary so all the following plotting functions can only draw within that rectangle.
     # This means values outside of the baselines and ranges won't be seen, but equally won't draw
     # over elements outside the 'plot' window.
     display.set_clip(top_left_x, top_left_y, plot_width, plot_height)
+    display.set_pen(MAGENTA) # Hardwiring a colour that's not black for lines in case one is not specified.
     for plot_pair in data_pairs: # Loops over data pairs to draw each line requested.
         x_column = plot_pair[0]
         y_column = plot_pair[1]
@@ -211,7 +224,7 @@ def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
             x_coord_new = top_left_x + round((x_value - x_start_value) * pixels_per_unit)
             y_coord_new = top_left_y + round(plot_height - ((readings[y_column] - min_value ) / vertical_scale))
             # print(f"{readings[y_column]} c at a height of {y_coord_new} pixels")
-            display.line(x_coord_old, y_coord_old, x_coord_new, y_coord_new, 2)
+            display.line(x_coord_old, y_coord_old, x_coord_new, y_coord_new, 2) # line thickness of 2, should it be settable ?
             previous_y_value = readings[y_column]
             previous_x_value = x_value
     display.update()
