@@ -14,6 +14,7 @@ BLACK = display.create_pen(0, 0, 0)
 WHITE = display.create_pen(255, 255, 255)
 BLUE = display.create_pen(100, 100, 200)
 RED = display.create_pen(200, 50, 50)
+GREEN = display.create_pen(50, 200, 50)
 MAGENTA = display.create_pen(200, 100, 200)
 
 try:
@@ -168,7 +169,29 @@ with open("/12_hours_ds18b20.txt", "r") as fh:
 def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
                min_value, value_range, x_start_value, x_range,
                data_block, data_pairs):
-    for plot_pair in data_pairs:
+    """ Routine to plot a (multi) line graph in a rectangular area of screen.
+    Requires the x and y coords of the top left corner, plus the width and height.
+    Also requires a minumum value for the x and y scales and the ranges of both values
+    It requires a 'data block', a multi dimensional array where each record (line)
+    is a list of values (at least 2 if intending to plot anything).
+    Finally it requires a list of tuples called "data_pairs" - slightly misnamed as there
+    can be an optional third value in the Tuple.
+    The first value in the tuple is the column of the data block to use for X coordinates.
+    The second value in the tuple is the column of the data block to use for Y coordinates.
+    The third, optional, value should be a 'pen' type for the screen and sets the colour of
+    the line to draw. If not specified, the line will be the same colour as the previous line.
+    If the first tuple doesn't have a third value, the line will be drawn in the same colour
+    as the background... doh.
+    """
+    # Clears the rectangle we're going to plot into with a BLACK background
+    display.set_pen(BLACK)
+    display.rectangle(top_left_x, top_left_y, plot_width, plot_height)
+    display.update()
+    # Sets a boundary so all the following plotting functions can only draw within that rectangle.
+    # This means values outside of the baselines and ranges won't be seen, but equally won't draw
+    # over elements outside the 'plot' window.
+    display.set_clip(top_left_x, top_left_y, plot_width, plot_height)
+    for plot_pair in data_pairs: # Loops over data pairs to draw each line requested.
         x_column = plot_pair[0]
         y_column = plot_pair[1]
         if len(plot_pair) > 2:
@@ -179,7 +202,9 @@ def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
         # pixels_per_reading = pixels_per_unit * 720 # 12 hours of data, a reading every 6 mins
         previous_y_value = data_block[0][y_column]
         previous_x_value = data_block[0][x_column]
-        for readings in data_block[1:]:
+        for readings in data_block[1:]: # skipping the first 'line' as if it's one of log files, it's the keys.
+            # maybe that line should be stripped off outside this routine, but I think slices = copies so skipping
+            # could be saving memory....
             x_value = readings[x_column]
             x_coord_old = top_left_x + round((previous_x_value - x_start_value) * pixels_per_unit)
             y_coord_old = top_left_y + round(plot_height - ((previous_y_value - min_value) / vertical_scale))
@@ -189,36 +214,41 @@ def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
             display.line(x_coord_old, y_coord_old, x_coord_new, y_coord_new, 2)
             previous_y_value = readings[y_column]
             previous_x_value = x_value
-        display.update()
-        time.sleep(0.05)
+    display.update()
+    # time.sleep(0.5)
+    display.remove_clip()
 
 display.set_pen(BLACK)
 display.clear()
 display.set_pen(MAGENTA)
 plot_graph(0, 0, WIDTH, HEIGHT,
-           21, 4,
+           20, 4,
            data_block[0][0], data_block[-1][0] - data_block[0][0],
-           data_block, [(0,1)])
+           data_block, [(0,1, WHITE)])
 display.set_pen(BLUE)
+time.sleep(2)
 plot_graph(0, 120, WIDTH, 120,
-           21, 4,
+           20, 4,
            data_block[0][0], data_block[-1][0] - data_block[0][0],
-           data_block, [(0,1)])
+           data_block, [(0,1, BLUE)])
 display.set_pen(WHITE)
+time.sleep(2)
 plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT,
-           21, 4,
+           20, 4,
            data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,1, RED)])
 display.set_pen(WHITE)
+time.sleep(2)
 plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
-           21, 4,
+           20, 4,
            data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,1, WHITE)])
+time.sleep(2)
 
-display.set_pen(BLACK)
+display.set_pen(GREEN)
 display.clear()
 plotables = [
-     (0,1, WHITE),
+     (0,1, BLUE),
      (0,2, RED),
      (0,3, MAGENTA),
 ]
@@ -236,5 +266,12 @@ plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
            data_block, plotables)
 plot_graph(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
            20, 4,
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block, plotables)
+display.set_pen(GREEN)
+display.rectangle(WIDTH//4 - 20, HEIGHT//4 -20 , WIDTH//2 + 40, HEIGHT//2 +40)
+display.update()
+plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
+           20, 3,
            data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, plotables)
