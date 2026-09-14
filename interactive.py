@@ -1,8 +1,16 @@
-import machine
+""" The imports from main.py - last checked 14/9/26"""
+from machine import Pin, RTC, ADC, I2C
 import time
+import gc
+from pimoroni import RGBLED
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY_2
 from breakout_bme69x import BreakoutBME69X, STATUS_HEATER_STABLE
+from breakout_bme280 import BreakoutBME280
+from info import wifi_creds2
+import onewire, ds18x20, binascii
 from logging_to_disc import Log_File
+from four_buttons import manual_set_time
+from local_config import hardware, one_wire_sensor, log_files, graph_ranges
 
 
 display = PicoGraphics(display=DISPLAY_PICO_DISPLAY_2, rotate=0)
@@ -18,9 +26,9 @@ GREEN = display.create_pen(50, 200, 50)
 MAGENTA = display.create_pen(200, 100, 200)
 
 try:
-    bme = BreakoutBME69X(machine.I2C(), 0x76)
+    bme = BreakoutBME69X(I2C(), 0x76)
 except(RuntimeError):
-    sensor_temp = machine.ADC(4)
+    sensor_temp = ADC(4)
     conversion_factor = 3.3 / (65535)
 
 def get_ext_temp():
@@ -288,3 +296,31 @@ plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
            20, 3,
            data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, plotables)
+
+
+
+
+
+def fit_scale_to_range(range_required, max_divisions):
+    tickmarks = [0.05, 0.1, 0.25, 0.5,
+                1.0, 2.5, 5.0,
+                10, 25, 50]
+    # max_divisions = 11
+    # range_required = 10
+    def most_ticks_with(scale_value):
+        for multiplier in range (1,max_divisions+1):
+            if multiplier * scale_value >= range_required:
+                return multiplier
+        return 0
+    rearranged = sorted(tickmarks, key=most_ticks_with)
+    best_tickmark = rearranged[-1]
+    no_of_ticks = int(round(target_range // best_tickmark))
+    if target_range % best_tickmark != 0:
+        no_of_ticks += 1
+    return best_tickmark, no_of_ticks
+
+
+for target_range in [3.8, 2.0, 0.99, 3, .40, 80, 100, 7, (37.4 - 3.8), 12.4, (53.8 - 49.2)]:
+    best_tickmark, no_of_ticks = fit_scale_to_range(target_range, 8)
+    print(f"To reach {target_range}, I could use a tickmark of {best_tickmark} : ", end="")
+    print(f"({no_of_ticks} * {best_tickmark}) = {no_of_ticks * best_tickmark}")
