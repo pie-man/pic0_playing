@@ -114,7 +114,7 @@ def timestamp_to_seconds(timestamp):
 """Block to read in a specified file, convert the timestamp to seconds since epoch and store as "data_block" """
 data_block=[]
 file_keys = []
-with open("/12_hours_ds18b20.txt", "r") as fh:
+with open("/24_hours_ds18b20.txt", "r") as fh:
             print("open..")
             keys_as_text = fh.readline().strip()
             data_block.append(keys_as_text)
@@ -379,9 +379,12 @@ for count, parameters in enumerate(variables):
             data_block, [(0, column, graph_pen)])
     time.sleep(2)
 
-def plot_graphs():
-                # top_left_x, top_left_y, plot_window_width, plot_window_height):
+def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height):
     # -=# NOTES #=-
+    # The pixel coordinates of the top left corner of the plotting area
+    #       - now in args
+    # The width and height of the plotting area (in pixels)
+    #       - now in args
     # list_o_logs - The grand list of log files (and contents)
     list_o_logs = [data_block]
     # bits_to_use - The 'map' of what to use out of those log files so :
@@ -394,12 +397,6 @@ def plot_graphs():
     data_pairs = []
     for count, column in enumerate(y_cols):
         data_pairs.append((x_col, column, line_colours[count % len(line_colours)]))
-    # The pixel coordinates of the top left corner of the plotting area
-    top_left_x = 0
-    top_left_y = 0
-    # The width and height of the plotting area (in pixels)
-    plot_window_width = WIDTH
-    plot_window_height = HEIGHT
     # Some way to have a key and specify What it is/says (and where it is?)
     
     # -=# END of NOTES #=-
@@ -438,9 +435,6 @@ def plot_graphs():
     plot_range = (tickmark_spacing * no_of_ticks)
 
     # Step six: Draw the y axis and lables and get back how wide it is
-    print(f"top_left_x is {top_left_x}, top_left_y is {top_left_y}")
-    print(f"plot_window_width is {plot_window_width}, remaining_plot_window_height is {remaining_plot_window_height}")
-    print(f"baseline is {baseline_value}, no. of ticks is {no_of_ticks}, tickmark_spacing is {tickmark_spacing}")
     y_axis_label_width = generate_tick_marks(top_left_x, top_left_y, plot_window_width, remaining_plot_window_height ,
                                             #  tick_increment, baseline, no_of_ticks
                                              tickmark_spacing, baseline_value, no_of_ticks,
@@ -451,16 +445,27 @@ def plot_graphs():
     margin = 4
     x_label_scale = 2
     display.set_pen(GREEN)
-    display.rectangle(top_left_x, remaining_plot_window_height, plot_window_width, x_axis_height)
+    display.rectangle(top_left_x, top_left_y + remaining_plot_window_height, plot_window_width, x_axis_height)
     display.set_pen(BLACK)
     text_start = top_left_x + (y_axis_label_width + plot_window_width - display.measure_text(text, x_label_scale)) // 2
     display.text(text, text_start, top_left_y + remaining_plot_window_height + margin )
     display.update()
 
-    # Step eight: Draw the danged lines baby, draw the danged lines....
-    plot_lines(y_axis_label_width, top_left_y, plot_window_width - y_axis_label_width, remaining_plot_window_height,
+    # Step eight: Draw the key daddio....
+    text = "Holy Moo cows Batman, this could be a key."
+    margin = 2
+    x_label_scale = 2
+    display.set_pen(BLUE)
+    display.rectangle(top_left_x, top_left_y + plot_window_height - key_height, plot_window_width, key_height)
+    display.set_pen(BLACK)
+    text_start = top_left_x
+    display.text(text, text_start, top_left_y + remaining_plot_window_height + x_axis_height + margin, wordwrap=plot_window_width )
+    display.update()
+
+    # Step nine: Draw the danged lines baby, draw the danged lines....
+    plot_lines(top_left_x + y_axis_label_width, top_left_y, plot_window_width - y_axis_label_width, remaining_plot_window_height,
             baseline_value, plot_range,
             data_block[1][0], data_block[-1][0] - data_block[1][0],
             data_block, data_pairs)
 
-plot_graphs()
+plot_graphs(0, 0, WIDTH, HEIGHT)
