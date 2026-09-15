@@ -1,7 +1,7 @@
 # This example takes the temperature from the Pico's onboard temperature sensor, and displays it on Pico Display Pack.
 # It's based on the thermometer example in the "Getting Started with MicroPython on the Raspberry Pi Pico" book.
 
-import machine
+from machine import Pin, RTC, ADC, I2C
 import time
 import gc
 from pimoroni import RGBLED
@@ -34,7 +34,7 @@ MAGENTA = display.create_pen(200, 100, 200)
 
     
 # set up the cpu temperature sensor
-sensor_temp = machine.ADC(4)
+sensor_temp = ADC(4)
 
 # hardware is a dictionary read in from local_config.py. The "LED_pins" key must be deined there.
 led = RGBLED(*hardware["LED_pins"])
@@ -42,20 +42,20 @@ led = RGBLED(*hardware["LED_pins"])
 conversion_factor = 3.3 / (65535)  # used for calculating a temperature from the raw sensor reading
 
 try:
-    bme69x = BreakoutBME69X(machine.I2C(), 0x76)
+    bme69x = BreakoutBME69X(I2C(), 0x76)
     got_bme69x = True
 except(RuntimeError): # need to put actual exception if it's not found here..
     got_bme69x = False
 
 try:
-    bme280 = BreakoutBME280(machine.I2C(), 0x76)
+    bme280 = BreakoutBME280(I2C(), 0x76)
     got_bme280 = True
 except(RuntimeError): # same again
     got_bme280 = False
 
 got_ds18t20 = False
 try:
-    ds_pin = machine.Pin(0)
+    ds_pin = Pin(0)
     ds_sensor = ds18x20.DS18X20(onewire.OneWire(ds_pin))
     thermometers = ds_sensor.scan()
     if len(thermometers) > 0:
@@ -545,12 +545,12 @@ if hardware["WiFi"]:
         print("Here's that other line")
         time.sleep(5)
         tm = time.gmtime(time_val)
-        machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+        RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
         time.sleep(1)
     except(KeyboardInterrupt):
         raise
     except: # Need better exception handling here, but then network stuff needs that too.
-        machine.RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
+        RTC().datetime((2026, 1, 1, 0, 0, 0, 0, 0))
         print("An error has occurred in Setup")
         write_text_in_a_box("Error in Setup :", top_left, 310, 30, BLACK, BLUE, 3)
         display.update()
