@@ -406,9 +406,14 @@ def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height):
     #               The Maximum value of all lines to be drawn (and thus perhaps the range)
     min_y = 10000
     max_y = -10000
+    graph_keys = []
+    # graph_keys=["Dave", "Dee", "Beaky"]
     for log in list_o_logs:
+        keys_as_text = log[0]
+        line_keys = keys_as_text.split(",")
         # for 'bits to use' in "this log" for if/when plotting data can come from multiple log files
         for y_col in y_cols:
+            graph_keys.append(line_keys[y_col])
             for line in log[1:]:
                 if line[x_col] is not None and line[y_col] is not None:
                     min_y = min(min_y, line[y_col])
@@ -447,19 +452,46 @@ def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height):
     display.set_pen(GREEN)
     display.rectangle(top_left_x, top_left_y + remaining_plot_window_height, plot_window_width, x_axis_height)
     display.set_pen(BLACK)
-    text_start = top_left_x + (y_axis_label_width + plot_window_width - display.measure_text(text, x_label_scale)) // 2
+    space_left = max(y_axis_label_width, (y_axis_label_width + plot_window_width - display.measure_text(text, x_label_scale)) // 2)
+    text_start = top_left_x + space_left
     display.text(text, text_start, top_left_y + remaining_plot_window_height + margin )
     display.update()
 
     # Step eight: Draw the key daddio....
-    text = "Holy Moo cows Batman, this could be a key."
-    margin = 2
-    x_label_scale = 2
-    display.set_pen(BLUE)
-    display.rectangle(top_left_x, top_left_y + plot_window_height - key_height, plot_window_width, key_height)
+    x_key_scale = 2
+    margin = 3
+    font_height = 16
+    no_of_keys = len(graph_keys)
+    max_key_length = max([display.measure_text(f" {key} - ", x_key_scale) for key in graph_keys])
+    print(f"Max key length is {max_key_length}")
+    keys_per_line = no_of_keys
+    while max_key_length * keys_per_line > plot_window_width:
+        print(f"{keys_per_line} keys of max length {max_key_length} is {max_key_length * keys_per_line} pixels while plot width is {plot_window_width}")
+        keys_per_line -= 1
+    if keys_per_line <= 0:
+        keys_per_line = 1
+    lines = no_of_keys // keys_per_line
+    if no_of_keys % keys_per_line > 0:
+        lines += 1
+    print(f"Got {no_of_keys} keys, gonna print {keys_per_line} keys on {lines} lines")
     display.set_pen(BLACK)
-    text_start = top_left_x
-    display.text(text, text_start, top_left_y + remaining_plot_window_height + x_axis_height + margin, wordwrap=plot_window_width )
+    display.rectangle(top_left_x, top_left_y + plot_window_height - key_height, plot_window_width, key_height)
+    key_no =0
+    y_shift = top_left_y + remaining_plot_window_height + x_axis_height + margin
+    for _ in range(lines):
+        x_shift = top_left_x + (plot_window_width - (keys_per_line * max_key_length)) //2
+        for _ in range(keys_per_line):
+            # print(f"Key number {key_no} is {graph_keys[key_no]}")
+            display.set_pen(data_pairs[key_no][2])
+            display.text(f" {graph_keys[key_no]} - ", x_shift, y_shift)
+            x_shift += max_key_length
+            key_no += 1
+            if key_no >= no_of_keys:
+                break
+            else:
+                continue
+            break
+        y_shift += margin + font_height
     display.update()
 
     # Step nine: Draw the danged lines baby, draw the danged lines....
