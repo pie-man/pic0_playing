@@ -145,7 +145,7 @@ with open("/new_style_file.txt", "w") as fh_out:
         new_record.extend(record_as_text)
         fh_out.write(f"{",".join(new_record)}\n")
 
-def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
+def plot_lines(top_left_x, top_left_y, plot_width, plot_height,
                min_value, value_range, x_start_value, x_range,
                data_block, data_pairs):
     # """ Routine to plot a (multi) line graph in a rectangular area of screen.
@@ -203,25 +203,25 @@ def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
 display.set_pen(BLACK)
 display.clear()
 display.set_pen(MAGENTA)
-plot_graph(0, 0, WIDTH, HEIGHT,
+plot_lines(0, 0, WIDTH, HEIGHT,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, WHITE)])
 display.set_pen(BLUE)
 time.sleep(2)
-plot_graph(0, 120, WIDTH, 120,
+plot_lines(0, 120, WIDTH, 120,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, BLUE)])
 display.set_pen(WHITE)
 time.sleep(2)
-plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT,
+plot_lines(WIDTH//2, 0, WIDTH//2, HEIGHT,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, RED)])
 display.set_pen(WHITE)
 time.sleep(2)
-plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
+plot_lines(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, WHITE)])
@@ -234,26 +234,26 @@ plotables = [
      (0,2, RED),
      (0,3, MAGENTA),
 ]
-plot_graph(WIDTH//2, HEIGHT//2, WIDTH//2, HEIGHT//2,
+plot_lines(WIDTH//2, HEIGHT//2, WIDTH//2, HEIGHT//2,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
-plot_graph(0, 0, WIDTH//2, HEIGHT//2,
+plot_lines(0, 0, WIDTH//2, HEIGHT//2,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
-plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
+plot_lines(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
-plot_graph(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
+plot_lines(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
            20, 4,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
 display.set_pen(GREEN)
 display.rectangle(WIDTH//4 - 20, HEIGHT//4 -20 , WIDTH//2 + 40, HEIGHT//2 +40)
 display.update()
-plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
+plot_lines(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
            20, 3,
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
@@ -287,7 +287,6 @@ def fit_scale_to_range(min_value, max_value, max_divisions):
 
 x_col = 0
 # y_col = 1
-plotables = []
 baselines = []
 ranges = []
 ticks = []
@@ -296,8 +295,6 @@ for y_col in [1, 2, 3]:
     max_y = -10000
     for line in data_block[1:]:
         if line[x_col] is not None and line[y_col] is not None:
-            err = plotables.append((line[x_col], line[y_col]))
-            # print(f"adding vales : {plotables[-1]}")
             min_y = min(min_y, line[y_col])
             max_y = max(max_y, line[y_col])
     best_tickmark, baseline, no_of_ticks = fit_scale_to_range(min_y, max_y, 8)
@@ -311,20 +308,20 @@ for y_col in [1, 2, 3]:
 display.set_pen(BLACK)
 display.clear()
 display.set_pen(MAGENTA)
-plot_graph(0, 0, WIDTH//2, HEIGHT//2,
+plot_lines(0, 0, WIDTH//2, HEIGHT//2,
            baselines[0], ranges[0],
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, RED)])
-plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
+plot_lines(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
            baselines[1], ranges[1],
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,2, BLUE)])
-plot_graph(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
+plot_lines(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
            baselines[2], ranges[2],
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,3, MAGENTA)])
 
-def generate_tick_marks(top_left_x, top_left_y, plot_width, plot_height, value_range,
+def generate_tick_marks(top_left_x, top_left_y, plot_width, plot_height,
                         tick_increment, baseline, no_of_ticks,
                         units=None, font=None, scale=None, pen=None):
     """Your guess is as good as mine..."""
@@ -338,6 +335,7 @@ def generate_tick_marks(top_left_x, top_left_y, plot_width, plot_height, value_r
         pen = MAGENTA
     display.set_font(font)
     font_height = 8 * scale
+    print(f"baseline is {baseline}, no. of ticks is {no_of_ticks}")
     tickmarks = [f"{baseline + (x * tick_increment)}{units}" for x in range(no_of_ticks)]
     tick_widths = [display.measure_text(text, scale) + 5 for text in tickmarks]
     y_axis_label_width = max(tick_widths)
@@ -372,11 +370,97 @@ for count, parameters in enumerate(variables):
     graph_pen = parameters[2]
     units = parameters[3]
     y_axis_label_width = generate_tick_marks(0, 20, WIDTH, HEIGHT -40,
-                                            ranges[count], ticks[count][0], baselines[count], ticks[count][1],
+                                            ticks[count][0], baselines[count], ticks[count][1],
                                             pen=axis_pen, units=units)
     time.sleep(1)
-    plot_graph(y_axis_label_width, 20, WIDTH - y_axis_label_width, HEIGHT -40,
+    plot_lines(y_axis_label_width, 20, WIDTH - y_axis_label_width, HEIGHT -40,
             baselines[count], ranges[count],
             data_block[1][0], data_block[-1][0] - data_block[1][0],
             data_block, [(0, column, graph_pen)])
     time.sleep(2)
+
+def plot_graphs():
+                # top_left_x, top_left_y, plot_window_width, plot_window_height):
+    # -=# NOTES #=-
+    # list_o_logs - The grand list of log files (and contents)
+    list_o_logs = [data_block]
+    # bits_to_use - The 'map' of what to use out of those log files so :
+    #               The name(s) of specific log file(s) to use
+    #               The columns to plot, possibly a set X scale column and a list of Y scale columns
+    #               A set of colours (or methods to determine colour ?) for each line being plotted
+    x_col = 0
+    y_cols = [1,2,3]
+    line_colours = [RED, MAGENTA, BLUE]
+    data_pairs = []
+    for count, column in enumerate(y_cols):
+        data_pairs.append((x_col, column, line_colours[count % len(line_colours)]))
+    # The pixel coordinates of the top left corner of the plotting area
+    top_left_x = 0
+    top_left_y = 0
+    # The width and height of the plotting area (in pixels)
+    plot_window_width = WIDTH
+    plot_window_height = HEIGHT
+    # Some way to have a key and specify What it is/says (and where it is?)
+    
+    # -=# END of NOTES #=-
+
+    # Step one : Work out the bounds of all the lines to be printed:
+    #               That is the minumim value of all lines
+    #               The Maximum value of all lines to be drawn (and thus perhaps the range)
+    min_y = 10000
+    max_y = -10000
+    for log in list_o_logs:
+        # for 'bits to use' in "this log" for if/when plotting data can come from multiple log files
+        for y_col in y_cols:
+            for line in log[1:]:
+                if line[x_col] is not None and line[y_col] is not None:
+                    min_y = min(min_y, line[y_col])
+                    max_y = max(max_y, line[y_col])
+
+    # Step two : work out if there's a key, where it sits and how much plot area it takes up
+    #               Assumption may be, it's at the bottom and takes one or two text lines height
+    #               from the plot window.
+    key_height = 40
+    remaining_plot_window_height = plot_window_height - key_height
+
+    # Step three : decide on X axis height, we can't draw it until we know Y axis width
+    # Hopefully we can 'guess' this based on font height and a bit of gap to put some ticks in..
+    x_axis_height = 20
+    remaining_plot_window_height = remaining_plot_window_height - x_axis_height
+
+    # Step four: Work out number of tickmarks we can write...
+    #              That's a function of font (text height), scale, minimum gap (blank space in pixels)
+    #              and the amount of plot window height we have left after a key and x axis are drawn..
+    maximum_tick_limit = 8
+
+    # Step five: Work out how many tick marks, and what thier spacing, in terms of the y values, is.
+    tickmark_spacing, baseline_value, no_of_ticks = fit_scale_to_range(min_y, max_y, maximum_tick_limit)
+    plot_range = (tickmark_spacing * no_of_ticks)
+
+    # Step six: Draw the y axis and lables and get back how wide it is
+    print(f"top_left_x is {top_left_x}, top_left_y is {top_left_y}")
+    print(f"plot_window_width is {plot_window_width}, remaining_plot_window_height is {remaining_plot_window_height}")
+    print(f"baseline is {baseline_value}, no. of ticks is {no_of_ticks}, tickmark_spacing is {tickmark_spacing}")
+    y_axis_label_width = generate_tick_marks(top_left_x, top_left_y, plot_window_width, remaining_plot_window_height ,
+                                            #  tick_increment, baseline, no_of_ticks
+                                             tickmark_spacing, baseline_value, no_of_ticks,
+                                             pen=BLUE, units="c")
+
+    # Step seven: Draw the X axis labels now we can shift it over for y_axis_label_width
+    text = "Look Ma, an X axis label"
+    margin = 4
+    x_label_scale = 2
+    display.set_pen(GREEN)
+    display.rectangle(top_left_x, remaining_plot_window_height, plot_window_width, x_axis_height)
+    display.set_pen(BLACK)
+    text_start = top_left_x + (y_axis_label_width + plot_window_width - display.measure_text(text, x_label_scale)) // 2
+    display.text(text, text_start, top_left_y + remaining_plot_window_height + margin )
+    display.update()
+
+    # Step eight: Draw the danged lines baby, draw the danged lines....
+    plot_lines(y_axis_label_width, top_left_y, plot_window_width - y_axis_label_width, remaining_plot_window_height,
+            baseline_value, plot_range,
+            data_block[1][0], data_block[-1][0] - data_block[1][0],
+            data_block, data_pairs)
+
+plot_graphs()
