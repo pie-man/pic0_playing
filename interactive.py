@@ -53,54 +53,7 @@ def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     display.text(text, TopLeft[0] + l_margin, TopLeft[1] + t_margin, scale=scale)
     display.update()
 
-def new_timestamp():
-    now = time.localtime()
-    text = f"{now[0]:04}/{now[1]:02}/{now[2]:02}@{now[3]:02}:{now[4]:02}:{now[5]:02}"
-    print(f"{text}")
-    write_text_in_a_box(text, (0,0), 310, 30, BLACK, BLUE, 3)
-    return text
-
-new_timestamp()
-
-log_1 = Log_File("test_file_1", 50, 5, ["timestamp", "temp", "pressure", "pirate value"])
-log_2 = Log_File("test_file_2", 20, 1, ["timestamp", "temp", "pirate value"])
-
-pirates = ["Flint", "Vane", "Rackham", "Silver", "Goonsbury"]
-
-for thingy in range(10):
-    data_dict = {}
-    data_dict["temp"] = get_int_temp()
-    data_dict["timestamp"] = new_timestamp()
-    pick_a_pirate = pirates[thingy % len(pirates)]
-    data_dict["pirate value"] = pick_a_pirate
-    if pick_a_pirate == "Flint":
-        data_dict["pressure"] = "oodles"
-    else:
-        if "pressure" in data_dict:
-            del data_dict["pressure"]
-    log_1.add_record(data_dict)
-    log_2.add_record(data_dict)
-    log_1.write_data()
-    time.sleep(2)
-
-print(f"Log 1 data is :")
-for count, record in enumerate(log_1.data):
-    stuff_n_nonsence = zip(log_1.keys, record)
-    print(f"{count} : ", end=" ")
-    for stuff, nonsence in stuff_n_nonsence:
-        print(f"{stuff} = {nonsence}", end=" ")
-    print("@")
-
-print(f"Log 2 data is :")
-for count, record in enumerate(log_2.data):
-    stuff_n_nonsence = zip(log_2.keys, record)
-    print(f"{count} : ", end=" ")
-    for stuff, nonsence in stuff_n_nonsence:
-        print(f"{stuff} = {nonsence}", end=" ")
-    print("@")
-
-log_2.write_data()
-
+"""Converting previous pressure readings into hPa"""
 fh = open("12_hours_bme.txt","r")
 fh_out = open ("edited.txt","w")
 first_line = fh.readline()
@@ -117,6 +70,8 @@ for line in fh:
 fh.close()
 fh_out.close()
 
+"""Mucking about trying to rotate a coloured "frame"
+Spoiler - it didn't work as intended, but did answer the question..."""
 thickness = 5
 for shift in range(11):
     h_shift = round((320/12) * shift)
@@ -125,7 +80,7 @@ for shift in range(11):
     display.set_pen(BLACK)
     display.clear()
     display.set_clip(h_shift, v_shift, WIDTH - 2* h_shift, HEIGHT - 2* v_shift)
-    for count, colour in enumerate(colours):
+    for count, colour in enumerate([RED, GREEN, BLUE]):
         border = count*30 + 10
         tl = [border + h_shift, border]
         tr = [WIDTH - border, border + v_shift]
@@ -141,6 +96,7 @@ for shift in range(11):
     display.remove_clip()
 
 
+"""Something to convert the 'old' human readable timestamps to seconds since epoch."""
 record = ["2026/09/12@03:08:36","18.52251","19.03584","18.50207","18.52547"]
 timestring = record[0]
 def timestamp_to_seconds(timestamp):
@@ -155,11 +111,13 @@ def timestamp_to_seconds(timestamp):
     sec = int(ss)
     return time.mktime((year, month, day, hour, min, sec, 0, 0))
 
+"""Block to read in a specified file, convert the timestamp to seconds since epoch and store as "data_block" """
 data_block=[]
 file_keys = []
 with open("/12_hours_ds18b20.txt", "r") as fh:
             print("open..")
             keys_as_text = fh.readline().strip()
+            data_block.append(keys_as_text)
             print(f"read keys as : {keys_as_text}")
             file_keys = keys_as_text.split(",")
             data_read = 0
@@ -171,13 +129,15 @@ with open("/12_hours_ds18b20.txt", "r") as fh:
                 print(f"data_vals[1:] = {data_vals[1:]}")
                 print(f"records = {records}")
                 data_vals = [timestamp]
-                data_vals.extend(records)
+                for thingy in records:
+                    data_vals.append(thingy)
                 data_block.append(data_vals)
 
+"""Block to write out "data_block" assuming timestamp is now seconds since epoch, but also trim values down to 2dp"""
 with open("/new_style_file.txt", "w") as fh_out:
-    description_text = ",".join(file_keys) + "\n"
+    description_text = data_block[0]
     fh_out.write(f"{description_text}")
-    for record in data_block:
+    for record in data_block[1:]:
         timestamp = f"{record[0]}"
         record_as_text = [f"{x:.2f}" if x else "no record" for x in record[1:]]
         print(f"record_as_text = {record_as_text}")
@@ -188,20 +148,20 @@ with open("/new_style_file.txt", "w") as fh_out:
 def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
                min_value, value_range, x_start_value, x_range,
                data_block, data_pairs):
-    """ Routine to plot a (multi) line graph in a rectangular area of screen.
-    Requires the x and y coords of the top left corner, plus the width and height.
-    Also requires a minumum value for the x and y scales and the ranges of both values
-    It requires a 'data block', a multi dimensional array where each record (line)
-    is a list of values (at least 2 if intending to plot anything).
-    Finally it requires a list of tuples called "data_pairs" - slightly misnamed as there
-    can be an optional third value in the Tuple.
-    The first value in the tuple is the column of the data block to use for X coordinates.
-    The second value in the tuple is the column of the data block to use for Y coordinates.
-    The third, optional, value should be a 'pen' type for the screen and sets the colour of
-    the line to draw. If not specified, the line will be the same colour as the previous line.
-    If the first tuple doesn't have a third value, the line will be drawn in the same colour
-    as the background... doh.
-    """
+    # """ Routine to plot a (multi) line graph in a rectangular area of screen.
+    # Requires the x and y coords of the top left corner, plus the width and height.
+    # Also requires a minumum value for the x and y scales and the ranges of both values
+    # It requires a 'data block', a multi dimensional array where each record (line)
+    # is a list of values (at least 2 if intending to plot anything).
+    # Finally it requires a list of tuples called "data_pairs" - slightly misnamed as there
+    # can be an optional third value in the Tuple.
+    # The first value in the tuple is the column of the data block to use for X coordinates.
+    # The second value in the tuple is the column of the data block to use for Y coordinates.
+    # The third, optional, value should be a 'pen' type for the screen and sets the colour of
+    # the line to draw. If not specified, the line will be the same colour as the previous line.
+    # If the first tuple doesn't have a third value, the line will be drawn in the same colour
+    # as the background... doh.
+    # """
     # Clears the rectangle we're going to plot into with a BLACK background
     display.set_pen(BLACK) # should a background colour be an argument ?
     # If so, should a default line/pen colour also be set ?
@@ -221,10 +181,11 @@ def plot_graph(top_left_x, top_left_y, plot_width, plot_height,
         pixels_per_unit = plot_width / x_range
         vertical_scale = value_range / plot_height
         # pixels_per_reading = pixels_per_unit * 720 # 12 hours of data, a reading every 6 mins
-        previous_y_value = data_block[0][y_column]
-        previous_x_value = data_block[0][x_column]
-        for readings in data_block[1:]: # skipping the first 'line' as if it's one of log files, it's the keys.
-            # maybe that line should be stripped off outside this routine, but I think slices = copies so skipping
+        previous_y_value = data_block[1][y_column]
+        previous_x_value = data_block[1][x_column]
+        for readings in data_block[2:]: # skipping the first 'line' as if it's one of log files, it's the keys.
+            # The second line has been assigned to "Previous value" for the start point of the graph.
+            # maybe the keys should be stripped off outside this routine, but I think slices = copies so skipping
             # could be saving memory....
             x_value = readings[x_column]
             x_coord_old = top_left_x + round((previous_x_value - x_start_value) * pixels_per_unit)
@@ -244,25 +205,25 @@ display.clear()
 display.set_pen(MAGENTA)
 plot_graph(0, 0, WIDTH, HEIGHT,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, WHITE)])
 display.set_pen(BLUE)
 time.sleep(2)
 plot_graph(0, 120, WIDTH, 120,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, BLUE)])
 display.set_pen(WHITE)
 time.sleep(2)
 plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, RED)])
 display.set_pen(WHITE)
 time.sleep(2)
 plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,1, WHITE)])
 time.sleep(2)
 
@@ -275,52 +236,88 @@ plotables = [
 ]
 plot_graph(WIDTH//2, HEIGHT//2, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
 plot_graph(0, 0, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
 plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
 plot_graph(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
 display.set_pen(GREEN)
 display.rectangle(WIDTH//4 - 20, HEIGHT//4 -20 , WIDTH//2 + 40, HEIGHT//2 +40)
 display.update()
 plot_graph(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
            20, 3,
-           data_block[0][0], data_block[-1][0] - data_block[0][0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, plotables)
 
-
-
-
-
-def fit_scale_to_range(range_required, max_divisions):
-    tickmarks = [0.05, 0.1, 0.25, 0.5,
+"""Demo of a routine which picks one of a preset bunch of tick spacings.
+Hopefully it picks the one that get's from a baseline, which is a multiple
+of said tickmark to a value greater than the max value indicated, whilst using
+the maximum number of tickmarks, within a specified limit, to achieve that"""
+def fit_scale_to_range(min_value, max_value, max_divisions):
+    tickmarks = [0.05, 0.1, 0.2, 0.25, 0.5,
                 1.0, 2.5, 5.0,
                 10, 25, 50]
     # max_divisions = 11
     # range_required = 10
+    range_required = max_value - min_value
     def most_ticks_with(scale_value):
-        for multiplier in range (1,max_divisions+1):
-            if multiplier * scale_value >= range_required:
+        for multiplier in range (1,max_divisions):
+            if multiplier * scale_value > range_required:
                 return multiplier
         return 0
     rearranged = sorted(tickmarks, key=most_ticks_with)
     best_tickmark = rearranged[-1]
-    no_of_ticks = int(round(target_range // best_tickmark))
-    if target_range % best_tickmark != 0:
+    no_of_ticks = int(round(range_required / best_tickmark))
+    baseline = (min_value // best_tickmark) * best_tickmark
+    # if range_required % best_tickmark != 0:
+    if (best_tickmark * no_of_ticks + baseline) < max_value:
+        print(f"Activating bat signal : ({best_tickmark} * {no_of_ticks} + {baseline}) < {max_value}")
         no_of_ticks += 1
-    return best_tickmark, no_of_ticks
+    print(f"Going with a baseline of {baseline}, {no_of_ticks} times {best_tickmark} should do it..")
+    return best_tickmark, baseline, no_of_ticks
+
+x_col = 0
+# y_col = 1
+plotables = []
+baselines = []
+ranges = []
+for y_col in [1, 2, 3]:
+    min_y = 10000
+    max_y = -10000
+    for line in data_block[1:]:
+        if line[x_col] is not None and line[y_col] is not None:
+            err = plotables.append((line[x_col], line[y_col]))
+            # print(f"adding vales : {plotables[-1]}")
+            min_y = min(min_y, line[y_col])
+            max_y = max(max_y, line[y_col])
+    best_tickmark, baseline, no_of_ticks = fit_scale_to_range(min_y, max_y, 8)
+    print(f"To span {min_y} : {max_y}, I could use {no_of_ticks} tickmarks of {best_tickmark} : ", end="")
+    print(f"from baseline : {baseline}, ({no_of_ticks} * {best_tickmark}) = {no_of_ticks * best_tickmark + baseline}")
+    ranges.append(no_of_ticks * best_tickmark)
+    baselines.append(baseline)
 
 
-for target_range in [3.8, 2.0, 0.99, 3, .40, 80, 100, 7, (37.4 - 3.8), 12.4, (53.8 - 49.2)]:
-    best_tickmark, no_of_ticks = fit_scale_to_range(target_range, 8)
-    print(f"To reach {target_range}, I could use a tickmark of {best_tickmark} : ", end="")
-    print(f"({no_of_ticks} * {best_tickmark}) = {no_of_ticks * best_tickmark}")
+display.set_pen(BLACK)
+display.clear()
+display.set_pen(MAGENTA)
+plot_graph(0, 0, WIDTH//2, HEIGHT//2,
+           baselines[0], ranges[0],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block, [(0,1, RED)])
+plot_graph(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
+           baselines[1], ranges[1],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block, [(0,2, BLUE)])
+plot_graph(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
+           baselines[2], ranges[2],
+           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block, [(0,3, MAGENTA)])
