@@ -290,6 +290,7 @@ x_col = 0
 plotables = []
 baselines = []
 ranges = []
+ticks = []
 for y_col in [1, 2, 3]:
     min_y = 10000
     max_y = -10000
@@ -304,6 +305,7 @@ for y_col in [1, 2, 3]:
     print(f"from baseline : {baseline}, ({no_of_ticks} * {best_tickmark}) = {no_of_ticks * best_tickmark + baseline}")
     ranges.append(no_of_ticks * best_tickmark)
     baselines.append(baseline)
+    ticks.append([best_tickmark, no_of_ticks])
 
 
 display.set_pen(BLACK)
@@ -321,3 +323,60 @@ plot_graph(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
            baselines[2], ranges[2],
            data_block[1][0], data_block[-1][0] - data_block[1][0],
            data_block, [(0,3, MAGENTA)])
+
+def generate_tick_marks(top_left_x, top_left_y, plot_width, plot_height, value_range,
+                        tick_increment, baseline, no_of_ticks,
+                        units=None, font=None, scale=None, pen=None):
+    """Your guess is as good as mine..."""
+    if units is None:
+        units = "c"
+    if font is None:
+        font = "bitmap8"
+    if scale is None:
+        scale = 2
+    if pen is None:
+        pen = MAGENTA
+    display.set_font(font)
+    font_height = 8 * scale
+    tickmarks = [f"{baseline + (x * tick_increment)}{units}" for x in range(no_of_ticks)]
+    tick_widths = [display.measure_text(text, scale) + 5 for text in tickmarks]
+    y_axis_label_width = max(tick_widths)
+    tick_spacing = plot_height / no_of_ticks
+    display.set_pen(BLACK)
+    display.rectangle(top_left_x, top_left_y, y_axis_label_width, plot_height)
+    display.set_clip(top_left_x, top_left_y, y_axis_label_width, plot_height)
+    display.set_pen(pen)
+    for count, (tickmark, width) in enumerate(zip(tickmarks, tick_widths)):
+        start_x = round(top_left_x + y_axis_label_width - width)
+        start_y = round(top_left_y + plot_height - (count * tick_spacing))
+        display.text(tickmark, start_x, start_y - font_height, scale=scale)
+        display.line(top_left_x + y_axis_label_width - 4, start_y, top_left_x + y_axis_label_width, start_y, 2)
+        print(f"tickmark {tickmark} @ {start_x}, {start_y}")
+    display.update()
+    display.remove_clip()
+    return y_axis_label_width
+
+display.set_pen(RED)
+display.clear()
+display.update()
+display.set_pen(GREEN)
+variables = [
+    # column, axis pen, graph pen, units
+    [1 , MAGENTA, RED, "c"],
+    [2 , BLUE, GREEN, "C"],
+    [3 , RED, MAGENTA, " spiders"],
+]
+for count, parameters in enumerate(variables):
+    column = parameters[0]
+    axis_pen = parameters[1]
+    graph_pen = parameters[2]
+    units = parameters[3]
+    y_axis_label_width = generate_tick_marks(0, 20, WIDTH, HEIGHT -40,
+                                            ranges[count], ticks[count][0], baselines[count], ticks[count][1],
+                                            pen=axis_pen, units=units)
+    time.sleep(1)
+    plot_graph(y_axis_label_width, 20, WIDTH - y_axis_label_width, HEIGHT -40,
+            baselines[count], ranges[count],
+            data_block[1][0], data_block[-1][0] - data_block[1][0],
+            data_block, [(0, column, graph_pen)])
+    time.sleep(2)
