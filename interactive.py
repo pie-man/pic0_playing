@@ -112,38 +112,45 @@ def timestamp_to_seconds(timestamp):
     return time.mktime((year, month, day, hour, min, sec, 0, 0))
 
 """Block to read in a specified file, convert the timestamp to seconds since epoch and store as "data_block" """
-data_block=[]
-file_keys = []
-with open("/24_hours_ds18b20.txt", "r") as fh:
-            print("open..")
-            keys_as_text = fh.readline().strip()
-            data_block.append(keys_as_text)
-            print(f"read keys as : {keys_as_text}")
-            file_keys = keys_as_text.split(",")
-            data_read = 0
-            for line in fh:
-                data_vals = line.rstrip().split(",")
-                print(f"Data vals point 1 = {data_vals}")
-                timestamp = timestamp_to_seconds(data_vals[0]) if data_vals[0] !="no record" else None
-                records = [float(x) if x !="no record" else None for x in data_vals[1:]]
-                print(f"data_vals[1:] = {data_vals[1:]}")
-                print(f"records = {records}")
-                data_vals = [timestamp]
-                for thingy in records:
-                    data_vals.append(thingy)
-                data_block.append(data_vals)
+def read_file(filename):
+    data_block=[]
+    with open(f"/{filename}", "r") as fh:
+                print(f"opened {filename}")
+                keys_as_text = fh.readline().strip()
+                file_keys = keys_as_text.split(",")
+                print(f"read keys as : {", ".join(file_keys)}")
+                data_block.append(file_keys)
+                for line in fh:
+                    data_vals = line.rstrip().split(",")
+                    print(f"Data vals @ read = {", ".join(data_vals)}")
+                    timestamp = timestamp_to_seconds(data_vals[0]) if data_vals[0] !="no record" else None
+                    records = [float(x) if x !="no record" else None for x in data_vals[1:]]
+                    print(f"data_vals[1:] = {data_vals[1:]}")
+                    print(f"records = {records}")
+                    adjusted_data_vals = [timestamp]
+                    adjusted_data_vals.extend(records)
+                    print(f"Data vals @ write = {", ".join(adjusted_data_vals)}")
+                    data_block.append(adjusted_data_vals)
+    return data_block
+
+data_block = read_file("24_hours_ds18b20.txt")
 
 """Block to write out "data_block" assuming timestamp is now seconds since epoch, but also trim values down to 2dp"""
-with open("/new_style_file.txt", "w") as fh_out:
-    description_text = data_block[0]
-    fh_out.write(f"{description_text}")
-    for record in data_block[1:]:
-        timestamp = f"{record[0]}"
-        record_as_text = [f"{x:.2f}" if x else "no record" for x in record[1:]]
-        print(f"record_as_text = {record_as_text}")
-        new_record = [timestamp]
-        new_record.extend(record_as_text)
-        fh_out.write(f"{",".join(new_record)}\n")
+def write_file(filename, data_block):
+    with open(f"/{filename}", "w") as fh_out:
+        keys_as_text = ",".join(data_block[0])
+        fh_out.write(f"{keys_as_text}")
+        print(f"keys_as_text = {keys_as_text}")
+        for record in data_block[1:]:
+            timestamp = f"{record[0]}"
+            record_as_text = [f"{x:.2f}" if x else "no record" for x in record[1:]]
+            print(f"record_as_text = {record_as_text}")
+            new_record = [timestamp]
+            new_record.extend(record_as_text)
+            fh_out.write(f"{",".join(new_record)}\n")
+    print(f"written 'data_block' to {filename}")
+
+write_file("new_style_file.txt", data_block)
 
 def plot_lines(top_left_x, top_left_y, plot_width, plot_height,
                min_value, value_range, x_start_value, x_range,
@@ -264,8 +271,8 @@ of said tickmark to a value greater than the max value indicated, whilst using
 the maximum number of tickmarks, within a specified limit, to achieve that"""
 def fit_scale_to_range(min_value, max_value, max_divisions):
     tickmarks = [0.05, 0.1, 0.2, 0.25, 0.5,
-                1.0, 2.5, 5.0,
-                10, 25, 50]
+                 1.0, 2.5, 5.0,
+                 10, 25, 50]
     # max_divisions = 11
     # range_required = 10
     range_required = max_value - min_value
@@ -335,7 +342,6 @@ def generate_tick_marks(top_left_x, top_left_y, plot_width, plot_height,
         pen = MAGENTA
     display.set_font(font)
     font_height = 8 * scale
-    print(f"baseline is {baseline}, no. of ticks is {no_of_ticks}")
     tickmarks = [f"{baseline + (x * tick_increment)}{units}" for x in range(no_of_ticks)]
     tick_widths = [display.measure_text(text, scale) + 5 for text in tickmarks]
     y_axis_label_width = max(tick_widths)
@@ -379,20 +385,21 @@ for count, parameters in enumerate(variables):
             data_block, [(0, column, graph_pen)])
     time.sleep(2)
 
-def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height):
+def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height,
+                list_o_logs, y_cols):
     # -=# NOTES #=-
     # The pixel coordinates of the top left corner of the plotting area
     #       - now in args
     # The width and height of the plotting area (in pixels)
     #       - now in args
     # list_o_logs - The grand list of log files (and contents)
-    list_o_logs = [data_block]
+    # list_o_logs = [data_block]
     # bits_to_use - The 'map' of what to use out of those log files so :
     #               The name(s) of specific log file(s) to use
     #               The columns to plot, possibly a set X scale column and a list of Y scale columns
     #               A set of colours (or methods to determine colour ?) for each line being plotted
     x_col = 0
-    y_cols = [1,2,3]
+    # y_cols = [1,2,3]
     line_colours = [RED, MAGENTA, BLUE]
     data_pairs = []
     for count, column in enumerate(y_cols):
@@ -441,7 +448,6 @@ def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height):
 
     # Step six: Draw the y axis and lables and get back how wide it is
     y_axis_label_width = generate_tick_marks(top_left_x, top_left_y, plot_window_width, remaining_plot_window_height ,
-                                            #  tick_increment, baseline, no_of_ticks
                                              tickmark_spacing, baseline_value, no_of_ticks,
                                              pen=BLUE, units="c")
 
@@ -500,4 +506,4 @@ def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height):
             data_block[1][0], data_block[-1][0] - data_block[1][0],
             data_block, data_pairs)
 
-plot_graphs(0, 0, WIDTH, HEIGHT)
+plot_graphs(0, 0, WIDTH, HEIGHT, data_block, [1,2,3])
