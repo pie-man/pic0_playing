@@ -20,9 +20,9 @@ one_wire_sensor = {
      "air" : "28e81dfb050000d6",
      "cup" : "28828beb050000c9",
      "back yard" : "28c12cfb050000bf",
-     "a" : "2865b3e9050000d8",
-     "b" : "287a10ea05000052",
-     "c" : "28d9aa2c06000071",
+     "Alien Moon" : "2865b3e9050000d8",
+     "Bikers Mitt" : "287a10ea05000052",
+     "Cauldron" : "28d9aa2c06000071",
      "default" : "28e81dfb050000d6",
 }
 

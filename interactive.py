@@ -111,15 +111,15 @@ def timestamp_to_seconds(timestamp):
     sec = int(ss)
     return time.mktime((year, month, day, hour, min, sec, 0, 0))
 
-"""Block to read in a specified file, convert the timestamp to seconds since epoch and store as "data_block" """
+"""Block to read in a specified file, convert the timestamp to seconds since epoch and store as "data_block[0]" """
 def read_file(filename):
-    data_block=[]
     with open(f"/{filename}", "r") as fh:
                 print(f"opened {filename}")
                 keys_as_text = fh.readline().strip()
                 file_keys = keys_as_text.split(",")
                 print(f"read keys as : {", ".join(file_keys)}")
-                data_block.append(file_keys)
+                data_block = []
+                # data_block[0].append(file_keys)
                 for line in fh:
                     data_vals = line.rstrip().split(",")
                     print(f"Data vals @ read = {", ".join(data_vals)}")
@@ -129,28 +129,29 @@ def read_file(filename):
                     print(f"records = {records}")
                     adjusted_data_vals = [timestamp]
                     adjusted_data_vals.extend(records)
-                    print(f"Data vals @ write = {", ".join(adjusted_data_vals)}")
+                    data_vals_as_string = ", ".join([f"{x}" for x in adjusted_data_vals])
+                    print(f"Data vals @ write = {data_vals_as_string}")
                     data_block.append(adjusted_data_vals)
-    return data_block
+    return file_keys, data_block
 
-data_block = read_file("24_hours_ds18b20.txt")
+log_keys, data_block = read_file("24_hours_ds18b20.txt")
 
-"""Block to write out "data_block" assuming timestamp is now seconds since epoch, but also trim values down to 2dp"""
-def write_file(filename, data_block):
+"""Block to write out "data_block[0]" assuming timestamp is now seconds since epoch, but also trim values down to 2dp"""
+def write_file(filename, file_keys, data_block):
     with open(f"/{filename}", "w") as fh_out:
-        keys_as_text = ",".join(data_block[0])
+        keys_as_text = ",".join(file_keys)
         fh_out.write(f"{keys_as_text}")
         print(f"keys_as_text = {keys_as_text}")
-        for record in data_block[1:]:
+        for record in data_block[0][1:]:
             timestamp = f"{record[0]}"
             record_as_text = [f"{x:.2f}" if x else "no record" for x in record[1:]]
             print(f"record_as_text = {record_as_text}")
             new_record = [timestamp]
             new_record.extend(record_as_text)
             fh_out.write(f"{",".join(new_record)}\n")
-    print(f"written 'data_block' to {filename}")
+    print(f"written 'data_block[0]' to {filename}")
 
-write_file("new_style_file.txt", data_block)
+write_file("new_style_file.txt", log_keys, data_block)
 
 def plot_lines(top_left_x, top_left_y, plot_width, plot_height,
                min_value, value_range, x_start_value, x_range,
@@ -188,10 +189,10 @@ def plot_lines(top_left_x, top_left_y, plot_width, plot_height,
         pixels_per_unit = plot_width / x_range
         vertical_scale = value_range / plot_height
         # pixels_per_reading = pixels_per_unit * 720 # 12 hours of data, a reading every 6 mins
-        previous_y_value = data_block[1][y_column]
-        previous_x_value = data_block[1][x_column]
-        for readings in data_block[2:]: # skipping the first 'line' as if it's one of log files, it's the keys.
-            # The second line has been assigned to "Previous value" for the start point of the graph.
+        previous_y_value = data_block[0][y_column]
+        previous_x_value = data_block[0][x_column]
+        for readings in data_block[1:]: # skipping the first 'line' as it has been assigned to "Previous value"
+            # for the start point of the graph.
             # maybe the keys should be stripped off outside this routine, but I think slices = copies so skipping
             # could be saving memory....
             x_value = readings[x_column]
@@ -212,25 +213,25 @@ display.clear()
 display.set_pen(MAGENTA)
 plot_lines(0, 0, WIDTH, HEIGHT,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,1, WHITE)])
 display.set_pen(BLUE)
 time.sleep(2)
 plot_lines(0, 120, WIDTH, 120,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,1, BLUE)])
 display.set_pen(WHITE)
 time.sleep(2)
 plot_lines(WIDTH//2, 0, WIDTH//2, HEIGHT,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,1, RED)])
 display.set_pen(WHITE)
 time.sleep(2)
 plot_lines(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,1, WHITE)])
 time.sleep(2)
 
@@ -243,26 +244,26 @@ plotables = [
 ]
 plot_lines(WIDTH//2, HEIGHT//2, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, plotables)
 plot_lines(0, 0, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, plotables)
 plot_lines(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, plotables)
 plot_lines(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
            20, 4,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, plotables)
 display.set_pen(GREEN)
 display.rectangle(WIDTH//4 - 20, HEIGHT//4 -20 , WIDTH//2 + 40, HEIGHT//2 +40)
 display.update()
 plot_lines(WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2,
            20, 3,
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, plotables)
 
 """Demo of a routine which picks one of a preset bunch of tick spacings.
@@ -300,7 +301,7 @@ ticks = []
 for y_col in [1, 2, 3]:
     min_y = 10000
     max_y = -10000
-    for line in data_block[1:]:
+    for line in data_block[0:]:
         if line[x_col] is not None and line[y_col] is not None:
             min_y = min(min_y, line[y_col])
             max_y = max(max_y, line[y_col])
@@ -317,15 +318,15 @@ display.clear()
 display.set_pen(MAGENTA)
 plot_lines(0, 0, WIDTH//2, HEIGHT//2,
            baselines[0], ranges[0],
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,1, RED)])
 plot_lines(WIDTH//2, 0, WIDTH//2, HEIGHT//2,
            baselines[1], ranges[1],
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,2, BLUE)])
 plot_lines(0, HEIGHT//2, WIDTH//2, HEIGHT//2,
            baselines[2], ranges[2],
-           data_block[1][0], data_block[-1][0] - data_block[1][0],
+           data_block[0][0], data_block[-1][0] - data_block[0][0],
            data_block, [(0,3, MAGENTA)])
 
 def generate_tick_marks(top_left_x, top_left_y, plot_width, plot_height,
@@ -381,12 +382,34 @@ for count, parameters in enumerate(variables):
     time.sleep(1)
     plot_lines(y_axis_label_width, 20, WIDTH - y_axis_label_width, HEIGHT -40,
             baselines[count], ranges[count],
-            data_block[1][0], data_block[-1][0] - data_block[1][0],
+            data_block[0][0], data_block[-1][0] - data_block[0][0],
             data_block, [(0, column, graph_pen)])
     time.sleep(2)
 
+def calculate_plot_key_sizes(display, plot_window_width, plot_keys):
+    # font = "bitmap8"
+    font_height = 8
+    key_font_scale = 2
+    margin = 3
+    space_per_line = (font_height * key_font_scale) + margin
+    no_of_keys = len(plot_keys)
+    max_key_length = max([display.measure_text(f" {key} - ", key_font_scale) for key in plot_keys])
+    print(f"Max key length is {max_key_length}")
+    keys_per_line = no_of_keys
+    while max_key_length * keys_per_line > plot_window_width:
+        print(f"{keys_per_line} keys of max length {max_key_length} is {max_key_length * keys_per_line} pixels while plot width is {plot_window_width}")
+        keys_per_line -= 1
+    if keys_per_line <= 0:
+        keys_per_line = 1
+    no_of_lines = no_of_keys // keys_per_line
+    if no_of_keys % keys_per_line > 0:
+        no_of_lines += 1
+    print(f"Got {no_of_keys} keys, gonna print {keys_per_line} keys on {no_of_lines} lines")
+    height_required = (no_of_lines * space_per_line) + margin
+    return max_key_length, keys_per_line, no_of_lines, height_required
+
 def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height,
-                list_o_logs, y_cols):
+                list_o_logs, file_keys, y_cols):
     # -=# NOTES #=-
     # The pixel coordinates of the top left corner of the plotting area
     #       - now in args
@@ -416,8 +439,7 @@ def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height,
     graph_keys = []
     # graph_keys=["Dave", "Dee", "Beaky"]
     for log in list_o_logs:
-        keys_as_text = log[0]
-        line_keys = keys_as_text.split(",")
+        line_keys = file_keys
         # for 'bits to use' in "this log" for if/when plotting data can come from multiple log files
         for y_col in y_cols:
             graph_keys.append(line_keys[y_col])
@@ -429,7 +451,9 @@ def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height,
     # Step two : work out if there's a key, where it sits and how much plot area it takes up
     #               Assumption may be, it's at the bottom and takes one or two text lines height
     #               from the plot window.
-    key_height = 40
+    # key_height = 40
+    max_key_length, keys_per_line, no_of_lines, height_required = calculate_plot_key_sizes(display, plot_window_width, graph_keys)
+    key_height = height_required
     remaining_plot_window_height = plot_window_height - key_height
 
     # Step three : decide on X axis height, we can't draw it until we know Y axis width
@@ -464,46 +488,64 @@ def plot_graphs(top_left_x, top_left_y, plot_window_width, plot_window_height,
     display.update()
 
     # Step eight: Draw the key daddio....
+    # (x_key_scale, margin, key_top_left_x, key_top_left_y, key_width, key_height
+    #  plot_keys, keys_per_line,  no_of_lines,
+    #  background_pen, key_colours_list, )
+    # font = "bitmap8"
+    font_height = 8
     x_key_scale = 2
-    margin = 3
-    font_height = 16
-    no_of_keys = len(graph_keys)
-    max_key_length = max([display.measure_text(f" {key} - ", x_key_scale) for key in graph_keys])
-    print(f"Max key length is {max_key_length}")
-    keys_per_line = no_of_keys
-    while max_key_length * keys_per_line > plot_window_width:
-        print(f"{keys_per_line} keys of max length {max_key_length} is {max_key_length * keys_per_line} pixels while plot width is {plot_window_width}")
-        keys_per_line -= 1
-    if keys_per_line <= 0:
-        keys_per_line = 1
-    lines = no_of_keys // keys_per_line
-    if no_of_keys % keys_per_line > 0:
-        lines += 1
-    print(f"Got {no_of_keys} keys, gonna print {keys_per_line} keys on {lines} lines")
-    display.set_pen(BLACK)
-    display.rectangle(top_left_x, top_left_y + plot_window_height - key_height, plot_window_width, key_height)
+    line_spacing = (font_height * x_key_scale) + margin
+    key_top_left_x = top_left_x
+    key_top_left_y = top_left_y + remaining_plot_window_height + x_axis_height
+    plot_keys = graph_keys
+    no_of_keys = len(plot_keys)
+    key_colours_list = [data_pairs[x][2] for x in range(no_of_keys)]
+    background_pen = BLACK
+    # margin = 3
+    # font_height = 16
+    # no_of_keys = len(graph_keys)
+    # max_key_length = max([display.measure_text(f" {key} - ", x_key_scale) for key in graph_keys])
+    # print(f"Max key length is {max_key_length}")
+    # keys_per_line = no_of_keys
+    # while max_key_length * keys_per_line > plot_window_width:
+    #     print(f"{keys_per_line} keys of max length {max_key_length} is {max_key_length * keys_per_line} pixels while plot width is {plot_window_width}")
+    #     keys_per_line -= 1
+    # if keys_per_line <= 0:
+    #     keys_per_line = 1
+    # lines = no_of_keys // keys_per_line
+    # if no_of_keys % keys_per_line > 0:
+    #     lines += 1
+    # print(f"Got {no_of_keys} keys, gonna print {keys_per_line} keys on {lines} lines")
+    # === SPLIT HERE =====
+    # (key_top_left_x, key_top_left_y, key_width, key_height,
+    #  no_of_lines_in_key, no_of_keys_per_line, max_key_length,
+    #  background_pen, list_of_pen_colours)
+
+    # max_key_length, keys_per_line, no_of_lines, height_required
+    display.set_pen(background_pen)
+    display.rectangle(key_top_left_x, key_top_left_y, plot_window_width, key_height)
     key_no =0
-    y_shift = top_left_y + remaining_plot_window_height + x_axis_height + margin
-    for _ in range(lines):
-        x_shift = top_left_x + (plot_window_width - (keys_per_line * max_key_length)) //2
+    y_shift = key_top_left_y + margin
+    for _ in range(no_of_lines):
+        x_shift = key_top_left_x + (plot_window_width - (keys_per_line * max_key_length)) //2
         for _ in range(keys_per_line):
             # print(f"Key number {key_no} is {graph_keys[key_no]}")
-            display.set_pen(data_pairs[key_no][2])
+            display.set_pen(key_colours_list[key_no])
             display.text(f" {graph_keys[key_no]} - ", x_shift, y_shift)
             x_shift += max_key_length
             key_no += 1
-            if key_no >= no_of_keys:
+            if key_no >= len(graph_keys):
                 break
             else:
                 continue
             break
-        y_shift += margin + font_height
+        y_shift += line_spacing
     display.update()
 
     # Step nine: Draw the danged lines baby, draw the danged lines....
     plot_lines(top_left_x + y_axis_label_width, top_left_y, plot_window_width - y_axis_label_width, remaining_plot_window_height,
             baseline_value, plot_range,
-            data_block[1][0], data_block[-1][0] - data_block[1][0],
-            data_block, data_pairs)
+            data_block[0][0], data_block[-1][0] - data_block[0][0],
+            data_block[0], data_pairs)
 
-plot_graphs(0, 0, WIDTH, HEIGHT, data_block, [1,2,3])
+plot_graphs(0, 0, WIDTH, HEIGHT, log_keys, [data_block], [1,2,3])
