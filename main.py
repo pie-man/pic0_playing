@@ -13,6 +13,8 @@ from logging_to_disc import Log_File
 import onewire, ds18x20, binascii
 from four_buttons import manual_set_time
 
+from graph_ploting import plot_graphs
+
 from local_config import hardware, one_wire_sensor, log_files, graph_ranges
 
 # set up the display and drawing constants
@@ -31,6 +33,8 @@ BLACK = display.create_pen(0, 0, 0)
 WHITE = display.create_pen(255, 255, 255)
 BLUE = display.create_pen(100, 100, 200)
 MAGENTA = display.create_pen(200, 100, 200)
+GREEN = display.create_pen(50, 200, 50)
+RED = display.create_pen(200, 50, 50)
 
     
 # set up the cpu temperature sensor
@@ -324,71 +328,6 @@ def calc_tick_marks(graph_height, graph_scale):
     # print(f"gives a set of tick marks : {tick_marks}")
     return tick_marks
 
-def plot_graphs(collection_o_graphable_thingies, units=None):
-    """Oooh, too many issues to list here...
-    Needs making into a routine where it's given the location of it's TLC, width and height.
-    It should handle clearing the axes (of which an X one still needs adding) and the plot area.
-    Right now it still accesses a load of global variables, smells like a farmyard and looks like my bedroom."""
-    # TODO: GRAPH_HEIGHT is still global and accuracy is hardwired here...
-    # TODO: The concept of TLC (top left corner) is required here to offset where the graph is plotted.
-    graph_height = GRAPH_HEIGHT
-    scale_to_within = 0.2
-    TopLCorner = (0, y_offset)
-    plot_window = (TopLCorner[0] + x_offset, TopLCorner[1], WIDTH - y_offset, graph_height)
-    # End of TODO block - hopefully
-    max_values = []
-    min_values = []
-    max_data_length = -30
-    # print(f"Gonna try plotting a graph wi {len(collection_o_graphable_thingies)} things awn it!")
-    for graphable_thingy in collection_o_graphable_thingies:
-        dave_count = 0
-        dave = []
-        for x in  graphable_thingy:
-            if x is not None:
-                dave.append(x)
-                dave_count += 1
-        # print(f"That yin had {dave_count} bits O useful data. ", end="")
-        max_data_length = max(max_data_length, dave_count)
-        if len(dave) == 0:
-            # print("")
-            continue
-        max_values.append(max(dave))
-        min_values.append(min(dave))
-        # print(f"Geein us a Max value O {max(dave)} an a Min value O {min(dave)}")
-        # if len(dave) <=10 or min(dave) < 0.009 or max(dave) < 0.009:
-        #     print(dave)
-    if len(max_values) == 0:
-        write_text_in_a_box("No Data Found", (10,50), WIDTH - 20, HEIGHT - 100, BLUE, WHITE, scale=5)
-        # print(f"Got nay Max Values to set a scale by. Bailin ooot.")
-        return
-    if max_data_length < 3:
-        write_text_in_a_box("Not Enough Data Found", (10,50), WIDTH - 20, HEIGHT - 100, BLUE, WHITE, scale=5)
-        # print(f"Nay got muny Values te plawt. Buggrin Orf Sharpish.")
-        return
-    max_value = max(max_values)
-    min_value = min(min_values)
-    graph_scale, baseline = calc_graph_scale(graph_height, max_value, min_value, accuracy=scale_to_within)
-    # print(f"MIN value = {min_value},  MAX value = {max_value}, graph_scale = {graph_scale}")
-    tick_marks = calc_tick_marks(graph_height, graph_scale)
-    # clear the plotting rectangle here...
-    # draws a white background for the text
-    display.set_pen(BLACK)
-    display.rectangle(plot_window[0], plot_window[1], plot_window[2], plot_window[3])
-    for tick in tick_marks:
-        # Does the '16' below correspond or relate to the 36 changed earlier ? is it something to do with text height ?
-        tick_line = round(graph_height + TopLCorner[1] - (tick * graph_scale) - 16)
-        tick_val = baseline + tick
-        # print(f"going to put {tick_val} @ {tick_line}")
-        colour = temperature_to_color(tick_val)
-        COLOUR_PEN = display.create_pen(*colour)
-        display.set_pen(COLOUR_PEN)
-        if units is None:
-            units = "c"
-        display.text(f"{tick_val:02.1f}{units}_", 4, tick_line, scale = 2)
-    for graphable_thingy in collection_o_graphable_thingies:
-        plot_box_line(plot_window, graphable_thingy, baseline, graph_scale, bar_width)
-        # plot_box_line(plot_window, graphable_thingy.get_data(), baseline, graph_scale, bar_width)
-
 def write_text_in_a_box(text, TopLeft, width, height, background, ink, scale=3):
     """Clears a rectangle to the background pen, and then writes some text, offset by margins in said
     rectangle. Curently used to write the temperature, graph title and time in 3 seperate rectangles
@@ -423,7 +362,7 @@ def add_to_a_log(log_name, current_data, log_files_dict, force=False):
             text = f"{clock[0]:04}/{clock[1]:02}/{clock[2]:02}@{clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
             # print(f"Adding a new record to log \"{log_name}\" @ {text}")
             new_record = {}
-            new_record["timestamp"] = text
+            new_record["timestamp"] = time.time()
             # print(f"Current log is {current_log["log"].name} : ")
             for key in current_log["keys"]:
                 if current_log[f"{key}_total"] is not None:
@@ -443,7 +382,8 @@ def take_readings(thermometers, one_wire_sensor,
                   got_bme280, got_bme69x,
                   got_ds18t20, all_log_keys):
     current_data = {}
-    current_data["time_of_readings"] = time.ticks_ms()
+    current_data["time_of_readings_ms"] = time.ticks_ms()
+    current_data["time_of_readings_s"] = time.time()
 
     # Take Sensor readings
     bme_readings = get_bme_readings()
@@ -453,14 +393,15 @@ def take_readings(thermometers, one_wire_sensor,
     current_bme_humidity = get_bme_humiditiy(bme_readings)
     current_cpu_temp = get_cpu_temp()
 
+    pre_free_mem = gc.mem_free()
+    free()
+
     remote_temperatures = get_remote_temps(thermometers)
 
     default_temp = get_default_temp(current_bme_temp, current_cpu_temp,
                                     remote_temperatures, one_wire_sensor,
                                     got_bme280, got_bme69x, got_ds18t20)
 
-    pre_free_mem = gc.mem_free()
-    free()
     post_free_mem = gc.mem_free()
 
     for key in all_log_keys:
@@ -668,18 +609,18 @@ while True:
             log_files[log]["changed"] = False
     if current_graph["changed"]:
         write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
-        data_streams = []
-        for log in logs:
-            keys_required = set(current_graph["keys"]).intersection(set(log_files[log]["keys"]))
-            # print(f"For graph {title}, looking at log {log} with keys {log_files[log]["keys"]} - Picking {keys_required}")
-            for key in keys_required:
-                data_streams.append(log_files[log]["log"].get_data(key))
-                free()
-        if "units" in current_graph:
-            units = current_graph["units"]
-        else:
-            units = "c"
-        plot_graphs(data_streams, units)
+        plot_graphs(display, 0, 27, WIDTH, HEIGHT - 27,
+                log_files, current_graph["keys"], logs,
+                "x_axis_marker_scale", "y_axis_units", "x_axis_markers")
+        """The routine which gets called externally by the logging program.
+        This carefully assembles and calculates all the sizes and placements
+        for elements of the graph as well as the calls to actually draw those elements within
+        a box of size plot_window_width x plot_window_height whose top left corner is specified."""
+        # -=# NOTES #=-
+        # log_files_dict - The grand list(dictionary, indexed by log filename) of log files (and contents)
+        # plot_keys      - The names of the keys to be plotted in this graph. There is currently an
+        #                  assumption that each key name only appears once in all the log files.
+        # plot_logs.     - Each graph has a list of the name(s) of specific log file(s) to data to use is in.
         current_graph["changed"] = False
 
     # Write the default temp to a box and heck lets also set the LED to match

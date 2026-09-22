@@ -58,17 +58,15 @@ class Log_File(object):
         no longer used, and populate historic records with None entries when new data types are added."""
         # print(f"reading...  {self.name}")
         with open(self.name, "r") as fh:
-            # print("open..")
+            # print(f"opened {self.name}")
             keys_as_text = fh.readline().strip()
-            # print(f"read keys as : {keys_as_text}")
             file_keys = keys_as_text.split(",")
-            data_read = 0
+            # print(f"read keys as : {", ".join(file_keys)}")
             for line in fh:
-                # print(f"reading a line: {line}")
                 data_dict = {}
                 data_vals = line.rstrip().split(",")
                 # print(f"Data vals point 1 = {data_vals}")
-                timestamp = data_vals[0] if data_vals[0] !="no record" else None
+                timestamp = int(data_vals[0]) if data_vals[0] !="no record" else None
                 records = [float(x) if x !="no record" else None for x in data_vals[1:]]
                 # print(f"data_vals[1:] = {data_vals[1:]}")
                 # print(f"records = {records}")
@@ -80,8 +78,6 @@ class Log_File(object):
                     # print(f"Setting {thing} to {data_vals[count]}")
                     data_dict[thing] = data_vals[count]
                 self.add_record(data_dict, len_check=False)
-                data_read += 1
-            # print(f"read {data_read} bits of data")
 
     def write_data(self):
         """Opens an empty file (potentially overwriting), and dumps the latest self.max_len records
@@ -92,8 +88,14 @@ class Log_File(object):
         with open(self.name, "w") as fh:
             fh.write(description_text)
             for record in self.data[0-self.max_len:]:
-                record_as_text = [f"{x}" if x else "no record" for x in record]
-                fh.write(f"{",".join(record_as_text)}\n")
+                timestamp = f"{record[0]}"
+                record_as_text = [f"{x:.2f}" if x else "no record" for x in record[1:]]
+                # print(f"record_as_text = ", end="")
+                # print(f"{",".join(record_as_text)}")
+                new_record = [timestamp]
+                new_record.extend(record_as_text)
+                fh.write(f"{",".join(new_record)}\n")
+        # print(f"written 'data_block' to {self.name}")
 
     def get_data(self, key):
         if key not in self.keys:
