@@ -609,6 +609,7 @@ while True:
             log_files[log]["changed"] = False
     if current_graph["changed"]:
         write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
+        print(f"Plotting graph : \"{title}\"")
         plot_graphs(display, 0, 27, WIDTH, HEIGHT - 27,
                 log_files, current_graph["keys"], logs,
                 "x_axis_marker_scale", current_graph["units"], "x_axis_markers")
