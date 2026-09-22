@@ -611,7 +611,7 @@ while True:
         write_text_in_a_box(title, (100, 0), 100, 26, BLACK, MAGENTA, scale=2)
         plot_graphs(display, 0, 27, WIDTH, HEIGHT - 27,
                 log_files, current_graph["keys"], logs,
-                "x_axis_marker_scale", "y_axis_units", "x_axis_markers")
+                "x_axis_marker_scale", current_graph["units"], "x_axis_markers")
         """The routine which gets called externally by the logging program.
         This carefully assembles and calculates all the sizes and placements
         for elements of the graph as well as the calls to actually draw those elements within

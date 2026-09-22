@@ -50,13 +50,19 @@ def plot_lines(display, top_left_x, top_left_y, plot_width, plot_height,
         pixels_per_unit = plot_width / x_range
         vertical_scale = value_range / plot_height
         # print(f"Pixels per unit = {pixels_per_unit}, vertical scale ={vertical_scale}")
-        previous_y_value = data_block[0][y_column]
-        previous_x_value = data_block[0][x_column]
-        # print(f"Previous x,y = {previous_x_value}, {previous_y_value}")
-        for readings in data_block[1:]: # skipping the first 'line' as it has been assigned to "Previous value"
+        for first_point_index, readings in enumerate(data_block):
+            previous_x_value = readings[x_column]
+            previous_y_value = readings[y_column]
+            # print(f"Previous x,y = {previous_x_value}, {previous_y_value}")
+            if previous_x_value is None or previous_y_value is None:
+                print(f"Got x,y coords of {previous_x_value},{previous_y_value} for first point, one of which looks dodgy...")
+                continue
+            break
+        else:
+            print(f"Should only see this when there is no usable first point......")
+            return
+        for readings in data_block[first_point_index + 1:]: # skipping the first 'line' as it has been assigned to "Previous value"
             # for the start point of the graph.
-            # maybe the keys should be stripped off outside this routine, but I think slices = copies so skipping
-            # could be saving memory....
             x_value = readings[x_column]
             y_value = readings[y_column]
             # print(f"Got x,y coords of {x_value},{y_value}")
@@ -162,24 +168,25 @@ def generate_tick_marks(display, top_left_x, top_left_y, plot_width, plot_height
     display.remove_clip()
     return y_axis_label_width
 
-def calculate_plot_key_sizes(display, plot_window_width, plot_keys,
+def calculate_plot_key_sizes(display, key_width, keys_to_plot,
                              font=None, key_font_scale=None, margin=None):
     """Using font and fontsize (scale) along with a margin between lines,
     calculate the height required to draw a key and how many names would be on each line."""
     if font is None:
-        # font = "bitmap8"
-        font_height = 8
+        font = "bitmap8"
+    font_height = 8
     if key_font_scale is None:
         key_font_scale = 2
     if margin is None:
         margin = 3
+    key_data = {}
     space_per_line = (font_height * key_font_scale) + margin
-    no_of_keys = len(plot_keys)
-    max_key_length = max([display.measure_text(f" {key} - ", key_font_scale) for key in plot_keys])
+    no_of_keys = len(keys_to_plot)
+    max_key_length = max([display.measure_text(f" {key} - ", key_font_scale) for key in keys_to_plot])
     # print(f"Max key length is {max_key_length}")
     keys_per_line = no_of_keys
-    while max_key_length * keys_per_line > plot_window_width:
-        # print(f"{keys_per_line} keys of max length {max_key_length} is {max_key_length * keys_per_line} pixels while plot width is {plot_window_width}")
+    while max_key_length * keys_per_line > key_width:
+        # print(f"{keys_per_line} keys of max length {max_key_length} is {max_key_length * keys_per_line} pixels while plot width is {key_width}")
         keys_per_line -= 1
     if keys_per_line <= 0:
         keys_per_line = 1
@@ -188,14 +195,20 @@ def calculate_plot_key_sizes(display, plot_window_width, plot_keys,
         no_of_lines += 1
     # print(f"Got {no_of_keys} keys, gonna print {keys_per_line} keys on {no_of_lines} lines")
     height_required = (no_of_lines * space_per_line) + margin
+    key_data["max key length"] = max_key_length
+    key_data["keys per line"] = keys_per_line
+    key_data["font"] = font
+    key_data["font scale"] = key_font_scale
+    key_data["margin"] = margin
     if no_of_lines > 3 and key_font_scale > 1:
         key_font_scale -= 1
         if margin > 1:
             margin -= 1
-        max_key_length, keys_per_line, height_required, key_font_scale, margin = \
-            calculate_plot_key_sizes(display, plot_window_width, plot_keys,
-                             font=font, key_font_scale=key_font_scale, margin=margin)
-    return max_key_length, keys_per_line, height_required, key_font_scale, margin
+        height_required, key_data = calculate_plot_key_sizes(display, key_width, keys_to_plot,
+                                                             font=font,
+                                                             key_font_scale=key_font_scale,
+                                                             margin=margin)
+    return height_required, key_data
 
 def map_key_names_to_data_columns(keys_being_plotted, logfiles_used, log_files_dict,
                                   no_of_colours):
@@ -219,20 +232,17 @@ def map_key_names_to_data_columns(keys_being_plotted, logfiles_used, log_files_d
 
 def draw_key(
         display, key_top_left_x, key_top_left_y, key_width, key_height,
-        key_to_log_column_map, keys_per_line, max_key_length,
-        x_key_scale, margin, font=None,
+        key_to_log_column_map, key_data,
         key_colours_list=None, background_pen=None,
         ):
     """The routine designed to clear a portion of screen and draw the key using the mappings created
     in map_key_names_to_data_columns """
-    if font is None:
-        font = "bitmap8"
+    font = key_data["font"]
     font_height = 8 # replace at some stage with a function based on font name....
-    # x_key_scale = 2
-    # key_top_left_x = top_left_x
-    # key_top_left_y = top_left_y + remaining_plot_window_height + x_axis_height
-    # plot_keys = graph_keys
-    # no_of_keys = len(plot_keys)
+    x_key_scale = key_data["font scale"]
+    margin = key_data["margin"]
+    keys_per_line = key_data["keys per line"]
+    max_key_length = key_data["max key length"]
     if key_colours_list is None:
         key_colours_list = [RED, MAGENTA, BLUE, WHITE]
     if background_pen is None:
@@ -282,19 +292,19 @@ def calculate_max_and_min_of_scales(logfile_names, log_files_dict, key_to_log_ma
                     line_count += 1
     return min_x, max_x, min_y, max_y, line_count
 
-def plot_graphs(display, top_left_x, top_left_y, plot_window_width, plot_window_height,
-                log_files_dict, plot_keys, plot_logs,
+def plot_graphs(display, top_left_x, top_left_y, graph_window_width, graph_window_height,
+                log_files_dict, keys_to_plot, logfiles_used,
                 x_axis_marker_scale, y_axis_units, x_axis_markers,
                 ):
     """The routine which gets called externally by the logging program.
     This carefully assembles and calculates all the sizes and placements
     for elements of the graph as well as the calls to actually draw those elements within
-    a box of size plot_window_width x plot_window_height whose top left corner is specified."""
+    a box of size graph_window_width x graph_window_height whose top left corner is specified."""
     # -=# NOTES #=-
     # log_files_dict - The grand list(dictionary, indexed by log filename) of log files (and contents)
-    # plot_keys      - The names of the keys to be plotted in this graph. There is currently an
+    # keys_to_plot      - The names of the keys to be plotted in this graph. There is currently an
     #                  assumption that each key name only appears once in all the log files.
-    # plot_logs.     - Each graph has a list of the name(s) of specific log file(s) to data to use is in.
+    # logfiles_used.     - Each graph has a list of the name(s) of specific log file(s) to data to use is in.
     
     line_colours = [RED, MAGENTA, BLUE, WHITE] # ultimately, this should possibly be passed in.
     # partly because it would reduce the requirement for this module to import display but also because
@@ -303,15 +313,15 @@ def plot_graphs(display, top_left_x, top_left_y, plot_window_width, plot_window_
 
     # Step zero : Work out the columns of the Y values in each of the logs...
     # I'm not a C programmer, I'd just labelled steps 1 through 8 before I realised I needed to do this early on...
-    plot_key_to_log_column_map = map_key_names_to_data_columns(plot_keys,
-                                                               plot_logs,
+    plot_key_to_log_column_map = map_key_names_to_data_columns(keys_to_plot,
+                                                               logfiles_used,
                                                                log_files_dict,
                                                                len(line_colours))
     
     # Step one : Work out the bounds of all the lines to be printed:
     #               That is the minumim value of all lines
     #               The Maximum value of all lines to be drawn (and thus perhaps the range)
-    min_x, max_x, min_y, max_y, records = calculate_max_and_min_of_scales(plot_logs, log_files_dict, plot_key_to_log_column_map)
+    min_x, max_x, min_y, max_y, records = calculate_max_and_min_of_scales(logfiles_used, log_files_dict, plot_key_to_log_column_map)
     x_range = max_x - min_x
 
     if records < 4:
@@ -321,20 +331,19 @@ def plot_graphs(display, top_left_x, top_left_y, plot_window_width, plot_window_
     # Step two : work out if there's a key, where it sits and how much plot area it takes up
     #               Assumption may be, it's at the bottom and takes one or two text lines height
     #               from the plot window.
-    max_key_length, keys_per_line, key_height, key_font_scale, key_margin = \
-            calculate_plot_key_sizes(display, plot_window_width, plot_keys)
-    remaining_plot_window_height = plot_window_height - key_height
+    key_height, key_data = calculate_plot_key_sizes(display, graph_window_width, keys_to_plot)
+    remaining_graph_window_height = graph_window_height - key_height
 
     # Step three : decide on X axis height, we can't draw it until we know Y axis width
     # Hopefully we can 'guess' this based on font height and a bit of gap to put some ticks in..
     x_axis_height = 25
-    remaining_plot_window_height = remaining_plot_window_height - x_axis_height
+    remaining_graph_window_height = remaining_graph_window_height - x_axis_height
 
     # Step four: Work out number of tickmarks we can write...
     #              That's a function of font (text height), scale, minimum gap (blank space in pixels)
     #              and the amount of plot window height we have left after a key and x axis are drawn..
     tick_margin = 10 # The minimum numer of pixels betwen tick labels if maximum_tick_limit is used.
-    maximum_tick_limit = calculate_maximum_y_ticks(remaining_plot_window_height, tick_margin)
+    maximum_tick_limit = calculate_maximum_y_ticks(remaining_graph_window_height, tick_margin)
 
     # Step five: Work out how many tick marks, and what thier spacing, in terms of the y values, is.
     tickmark_spacing, baseline_value, no_of_ticks = fit_scale_to_range(min_y, max_y, maximum_tick_limit)
@@ -342,41 +351,38 @@ def plot_graphs(display, top_left_x, top_left_y, plot_window_width, plot_window_
 
     # Step six: Draw the y axis and lables and get back how wide it is
     y_axis_label_width = generate_tick_marks(display, top_left_x, top_left_y,
-                                             plot_window_width, remaining_plot_window_height,
+                                             graph_window_width, remaining_graph_window_height,
                                              tickmark_spacing, baseline_value, no_of_ticks,
-                                             pen=BLUE, units="c")
+                                             pen=BLUE, units=y_axis_units)
 
     # Step seven: Draw the X axis labels now we can shift it over for y_axis_label_width
     text = "Look Ma, an X axis label"
     margin = 6
     x_label_scale = 2
     x_axis_top_left_x = top_left_x
-    x_axis_top_left_y = top_left_y + remaining_plot_window_height
-    plot_window_width = plot_window_width
-    x_axis_width = plot_window_width - y_axis_label_width
+    x_axis_top_left_y = top_left_y + remaining_graph_window_height
+    graph_window_width = graph_window_width
+    x_axis_width = graph_window_width - y_axis_label_width
     display.set_pen(BLACK)
-    display.rectangle(x_axis_top_left_x, x_axis_top_left_y, plot_window_width, x_axis_height)
+    display.rectangle(x_axis_top_left_x, x_axis_top_left_y, graph_window_width, x_axis_height)
     display.set_pen(GREEN)
-    display.line(x_axis_top_left_x + y_axis_label_width, x_axis_top_left_y + 3, plot_window_width, x_axis_top_left_y + 3)
+    display.line(x_axis_top_left_x + y_axis_label_width, x_axis_top_left_y + 3, graph_window_width, x_axis_top_left_y + 3)
     tick_count = 6
     tick_gap = x_axis_width / (tick_count +1)
     for tick in range(1,tick_count + 1):
         x_point = round(tick * tick_gap) + x_axis_top_left_x + y_axis_label_width
         display.line(x_point, x_axis_top_left_y, x_point, x_axis_top_left_y + 4)
-    space_left = max(y_axis_label_width, (y_axis_label_width + plot_window_width - display.measure_text(text, x_label_scale)) // 2)
+    space_left = max(y_axis_label_width, (y_axis_label_width + graph_window_width - display.measure_text(text, x_label_scale)) // 2)
     text_start = x_axis_top_left_x + space_left
     display.text(text, text_start, x_axis_top_left_y + margin )
     display.update()
 
     # Step eight: Draw the key daddio....
     key_top_left_x = top_left_x
-    key_top_left_y = top_left_y + remaining_plot_window_height + x_axis_height
-    # key_scale = 2
+    key_top_left_y = top_left_y + remaining_graph_window_height + x_axis_height
     draw_key(
-        display, key_top_left_x, key_top_left_y, plot_window_width, key_height,
-        plot_key_to_log_column_map, keys_per_line, max_key_length,
-        key_font_scale, key_margin, font=None,
-        key_colours_list=None, background_pen=None,
+        display, key_top_left_x, key_top_left_y, graph_window_width, key_height,
+        plot_key_to_log_column_map, key_data
         )
 
     # Step nine: Draw the danged lines baby, draw the danged lines....
@@ -384,7 +390,7 @@ def plot_graphs(display, top_left_x, top_left_y, plot_window_width, plot_window_
     for log_file_name, data_pairs in plot_key_to_log_column_map.items():
         current_data_block = log_files_dict[log_file_name]["log"].data
         # current_data_block = log_files_dict[log_file_name]["log"] # dummy input is a plain dict....
-        plot_lines(display, top_left_x + y_axis_label_width, top_left_y, plot_window_width - y_axis_label_width, remaining_plot_window_height,
+        plot_lines(display, top_left_x + y_axis_label_width, top_left_y, graph_window_width - y_axis_label_width, remaining_graph_window_height,
                 baseline_value, plot_range,
                 min_x, x_range,
                 current_data_block, data_pairs,
