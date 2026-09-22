@@ -180,8 +180,11 @@ def calculate_plot_key_sizes(display, key_width, keys_to_plot,
     if margin is None:
         margin = 3
     key_data = {}
-    space_per_line = (font_height * key_font_scale) + margin
     no_of_keys = len(keys_to_plot)
+    if no_of_keys == 1:
+        key_data["use key"] = False
+        return 0, key_data
+    space_per_line = (font_height * key_font_scale) + margin
     max_key_length = max([display.measure_text(f" {key} - ", key_font_scale) for key in keys_to_plot])
     # print(f"Max key length is {max_key_length}")
     keys_per_line = no_of_keys
@@ -200,7 +203,12 @@ def calculate_plot_key_sizes(display, key_width, keys_to_plot,
     key_data["font"] = font
     key_data["font scale"] = key_font_scale
     key_data["margin"] = margin
-    if no_of_lines > 3 and key_font_scale > 1:
+    key_data["use key"] = True
+    if no_of_lines > 3 and no_of_keys > 1 and key_font_scale > 1:
+        print(f"Got more than three lines in the key... max key length = {max_key_length}")
+        for key in keys_to_plot:
+            key_length = display.measure_text(f" {key} - ", key_font_scale)
+            print(f"key {key} is {key_length} pixels long.")
         key_font_scale -= 1
         if margin > 1:
             margin -= 1
@@ -237,6 +245,8 @@ def draw_key(
         ):
     """The routine designed to clear a portion of screen and draw the key using the mappings created
     in map_key_names_to_data_columns """
+    if not key_data["use key"]: # then there's nothing to do here...
+        return
     font = key_data["font"]
     font_height = 8 # replace at some stage with a function based on font name....
     x_key_scale = key_data["font scale"]
@@ -399,3 +409,9 @@ def plot_graphs(display, top_left_x, top_left_y, graph_window_width, graph_windo
             clear_plot_window = False # basically only clear the window on the 1st call when looping through logfiles
     display.update()
     return
+
+# dave = 12.34567890123456
+# print(f" Dave is : {dave:10.5f}")
+
+# for max_dp in range(5,-1,-1):
+#     print(f" Dave is : {dave:10.{max_dp}f}")
