@@ -86,10 +86,15 @@ Hopefully it picks the one that get's from a baseline, which is a multiple
 of said tickmark to a value greater than the max value indicated, whilst using
 the maximum number of tickmarks, within a specified limit, to achieve that"""
 def fit_scale_to_range(min_value, max_value, max_divisions, debug_sw=False):
-    tickmarks = [0.05, 0.1, 0.2, 0.25, 0.5,
-                 1.0, 2.5, 5.0,
-                 10, 25, 50]
     range_required = max_value - min_value
+    if max_value > 999 or range_required > 20: # measurement is likely pressure or range is 'big'
+        tickmarks = [1.0, 2.0, 5.0,
+                    10, 25, 50,
+                    100]
+    else:
+        tickmarks = [0.01, 0.02, 0.05,
+                    0.1, 0.2, 0.25, 0.5,
+                    1.0, 2.5, 5.0]
     def most_ticks_with(scale_value):
         for multiplier in range (1,max_divisions):
             if multiplier * scale_value >= range_required - (scale_value / 10): # shrink range slightly because of rounding errors.
@@ -148,7 +153,19 @@ def generate_tick_marks(display, top_left_x, top_left_y, plot_width, plot_height
         pen = MAGENTA
     display.set_font(font)
     font_height = 8 * scale
-    tickmarks = [f"{baseline + (x * tick_increment)}{units}" for x in range(no_of_ticks)]
+    #=-
+    increment_string = f"{tick_increment}"
+    split_on_point = increment_string.split(".")
+    if len(split_on_point) > 1:
+        natural_dp = len(split_on_point[1])
+        if split_on_point[1] == "0":
+            natural_dp = 0
+    else:
+        natural_dp = 0
+    tickmarks = [f"{baseline + (x * tick_increment):.{natural_dp}f}{units}" for x in range(no_of_ticks)]
+    print(f"{tickmarks}")
+    #=-
+    tickmarks = [f"{baseline + (x * tick_increment):.{natural_dp}f}{units}" for x in range(no_of_ticks)]
     tick_widths = [display.measure_text(text, scale) + 5 for text in tickmarks]
     y_axis_label_width = max(tick_widths)
     tick_spacing = plot_height / no_of_ticks
@@ -410,8 +427,17 @@ def plot_graphs(display, top_left_x, top_left_y, graph_window_width, graph_windo
     display.update()
     return
 
-# dave = 12.34567890123456
-# print(f" Dave is : {dave:10.5f}")
+# import time
 
-# for max_dp in range(5,-1,-1):
-#     print(f" Dave is : {dave:10.{max_dp}f}")
+# current_time = time.time() # seconds since epoch
+
+# # Note to self - epoch is 1/1/1970 - which was a Wednesday, so the 'week' shift doesn't quite work as expected..
+# # On the minute, on the hour, next midnight, midnight at the beginning of a new week 
+# for marker_scale in [60, 3600, 86400, 604800]:
+#     next_marker_time = current_time + (marker_scale - current_time%marker_scale)
+#     clock = time.localtime(current_time)
+#     current_clock = f"{clock[2]:02}/{clock[1]:02}  {clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+#     clock = time.localtime(next_marker_time)
+#     next_clock = f"{clock[2]:02}/{clock[1]:02}  {clock[3]:02}:{clock[4]:02}:{clock[5]:02}"
+
+#     print(f"It's {current_clock} and the next whole \"unit\" is {next_clock} : unit is {marker_scale}s")
